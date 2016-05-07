@@ -1,0 +1,145 @@
+---
+title: "To IDS format"
+author: "Göran Broström"
+date: "May 6, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(skum)
+sobs <- obs[obs$region == "ske", ]
+sper <- per[per$region == "ske", ]
+library(xtable)
+library(knitr)
+```
+
+## The Skellefteå data
+
+In the **R** package *skum*, Skellefteå inhabitants born between 1815 and 1950 are included. Data are given in two sources, a *person* file containing *static* information, i.e., information that is *not* changing over time, and an *observation* file, representing *presence* intervals in the parish, where each time interval contain information fixed in that interval, but information may vary between intervals for the same individual.
+
+### The *person* file
+
+Each individual is represented by one row in the data frame:
+
+```{r oneper}
+kable(sper[3:4, c("id", "kon", "mid", "fid", "foddat", "doddat")], row.names = FALSE)
+```
+
+There are `r NCOL(per)` variables (columns) in total in *per*, here some of them are selected: *ID, mother's ID, father's ID, birthdate, death date*. No. 9 has full information (on the selected variables), while No. 17 has no links to the parents and his death date is missing, probably due to the fact that he out-migrated and was lost to follow-up.
+
+### The *observation* file
+
+```{r oneobs}
+kable(sobs[sobs$id %in% c(9, 17), c("id", "startdat", "starttyp", "slutdat", "sluttyp", "socBranch", "civst", "pid")], row.names = FALSE)
+```
+
+No. 9 has many time intervals, due to the fact that he changes civil and social status several times.
+
+## Creation of the INDIVIDUAL table
+
+To save some efforts for this particular event, we concentrate on *mothers* and *children*. First, mothers are all those women who are linked to by the variable *mid* in the *per* file:
+
+```{r mothers}
+mothers <- unique(sper$mid[!is.na(per$mid)])
+length(mothers)                  
+```
+
+Children are those individuals with *mid* in the set *mothers*:
+
+```{r children}
+children <- sper$id[(!is.na(sper$mid)) & sper$mid %in% mothers] 
+length(children)
+```
+
+Now, the union of "mothers" and "children" should make up the content of "INDIVIDUAL":
+
+```{r content}
+content <- unique(c(mothers, children))
+length(content)
+```
+
+According to Luciana's "Program for studying intergenerational ...", each individual in INDIVIDUAL
+should be described in six records, representing the *Type*s *Birth_date*, *Death_date*, *Sex*, *Start_observation*, *End_observation*, and *Marriage_date*. We create one data frame for each Type to start with, and then we join them into one data frame INDIVIDUAL.
+
+```{r onebyone}	    
+pe <- sper[sper$id %in% content, ]
+ind1 <- data.frame(id_I = pe$id,
+                   Type = "Birth_date",
+                   Value = as.character(pe$foddat))
+		   	 
+ind2 <- data.frame(id_I = pe$id,
+                   Type = "Death_date",
+                   Value = as.character(pe$doddat))
+		   	 
+ind3 <- data.frame(id_I = pe$id,
+                   Type = "Sex",
+                   Value = pe$kon)
+		   	 
+ind4 <- data.frame(id_I = pe$id,
+                   Type = "Start_observation",
+                   Value = as.character(pe$frsbobdat))
+		   	 
+ind5 <- data.frame(id_I = pe$id,
+                   Type = "End_observation",
+                   Value = as.character(pe$frsbosdat))
+		   	 
+ind6 <- data.frame(id_I = pe$id,
+                   Type = "Marriage_date",
+                   Value = NA)
+```
+
+We now have the small problem of getting the *marriage date*. However,
+the *first* marriage date is easy to find, it is the minimum of *startdat* for
+intervals with *civst == married* (for each individual). The only technical
+complication is that not all get married and that some marries more than once.
+We play it simple and are satisfied with the first marriage date (if any).
+
+We single out the subset of *sobs* with only married:
+
+```{r mardat}
+mar <- sobs[sobs$civst == "married", c("id", "startdat")]
+mar <- mar[order(mar$id, mar$startdat), ] # To make sure ...
+mar <- mar[!duplicated(mar$id), ]
+kable(mar[1:5, ], row.names = FALSE)
+```
+
+Remains to put *startdat* in the *Value* column of *ind6* by matching on *id* and *id_I*:
+
+```{r matchon}
+ind6$Value <- as.character(mar$startdat[match(ind6$id_I, mar$id)])
+kable(ind6[1:5, ], row.names = FALSE)
+```
+
+A missing value means no marriage (in our registers).
+
+The final *INDIVIDUAL* is created by joining the six data frames into one and reorder:
+
+```{r INDIVIDUAL}
+INDIVIDUAL <- rbind(ind1, ind2, ind3, ind4, ind5, ind6)
+INDIVIDUAL <- INDIVIDUAL[order(INDIVIDUAL$id_I), ]
+kable(INDIVIDUAL[1:12, ], row.names = FALSE)
+```
+
+Remains to create the table INDIV_INDIV:
+
+```{r}
+ii <- sper[sper$id %in% children, c("mid", "id")]
+ii <- ii[order(ii$mid, ii$id), ]
+INDIV_INDIV <- data.frame(id_1 = ii$mid,
+                          id_2 = ii$id,
+                          Relation = "Mother")
+kable(INDIV_INDIV[1:5, ], row.names = FALSE)
+```
+
+Remains to save the two created data frames:
+
+```{r saveall}
+save(INDIVIDUAL, file = "INDIVIDUAL.rda")
+save(INDIV_INDIV, file = "INDIV_INDIV.rda")
+```
+
+
+
+
+
