@@ -1,0 +1,78 @@
+---
+title: "From IDS to analysis"
+author: "Göran Broström"
+date: "May 7, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+```
+
+## Introduction
+
+We have two data files with data in *IDS format*, *INDIVIDUAL.rda* and *INDIV_INDIV.rda*. From these files our task is to create a data file that is suitable for *statistical analysis*.
+
+The result will be a file based on *children*, in a wide sense (all grown-up have been children earlier in life). You could also say that it will be based on *mothers*.
+
+This is what we will accomplish: Family trees on the female side, built up from the roots consisting of all women without link to a biological mother. These "start atoms" we call *generation 0*. Next, *generation 1* consists of all offspring to generation 0, including males. Then, generation 2 consists of all offspring to the *females in generation 1*, also males, and so on. A branch is thus always finished when a male pops up. 
+
+## The *INDIVIDUAL* data frame
+
+Let us have a look at *INDIVIDUAL*:
+
+```{r lookINDIVIDUAL}
+load("data/INDIVIDUAL.rda")
+kable(head(INDIVIDUAL), row.names = FALSE)
+```
+
+This is the total information on *id = 1*. The structure of the data frame is repeated for each individual: Six rows per individual, and only *static data* (fixed over time). This is a typical example of an *un-tidy data set*. A *tidy* data set has variables in columns and observations in rows, and that is what is needed in any structured statistical data analysis (source: [Hadley Wickham](https://www.jstatsoft.org/article/view/v059i10)). 
+
+This u-tidiness is easily fixed, but we prefer to start in the other end, with the *INDIV_INDIV* data frame.
+
+## The *INDIV_INDIV* data frame
+
+The *INDIV_INDIV* data frame has a very simple structure:
+
+```{r lookINDIV_INDIV}
+load("data/INDIV_INDIV.rda")
+kable(head(INDIV_INDIV), row.names = FALSE)
+```
+
+The variable *id_1* is the mother of *id_2*, and the variable *Relation* is *redundant* (constant equal to "Mother"). *INDIV_INDIV* is a tidy data frame, if we regard *id_2* as the key of the *observations*. Remember, *id_2* is the child of *id_1*, so a starting point for our efforts is the data frame *per*, given by 
+
+```{r getper}
+per <- data.frame(id = INDIV_INDIV$id_2,
+                  mid = INDIV_INDIV$id_1)
+summary(per)
+```
+
+Next we pick the six static variables *sex*, *birthdate*, *deathdate*, *startdate*, *enddate*, and *marriagedate* from *INDIVIDUAL*:
+
+```{r pickfrom}
+indx <- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == "Sex", "id_I"])
+per$sex <- INDIVIDUAL[INDIVIDUAL$Type == "Sex", ]$Value[indx]
+##
+indx <- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == "Birth_date", "id_I"])
+per$birthdate <- INDIVIDUAL[INDIVIDUAL$Type == "Birth_date", ]$Value[indx]
+##
+indx <- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == "Death_date", "id_I"])
+per$deathdate <- INDIVIDUAL[INDIVIDUAL$Type == "Death_date", ]$Value[indx]
+##
+indx <- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == "Start_observation", "id_I"])
+per$startdate <- INDIVIDUAL[INDIVIDUAL$Type == "Start_observation", ]$Value[indx]
+##
+indx <- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == "End_observation", "id_I"])
+per$stopdate <- INDIVIDUAL[INDIVIDUAL$Type == "End_observation", ]$Value[indx]
+##
+indx <- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == "Marriage_date", "id_I"])
+per$marriagedate <- INDIVIDUAL[INDIVIDUAL$Type == "Marriage_date", ]$Value[indx]
+##
+kable(head(per), row.names = FALSE)
+```
+
+This is a good start for the analysis; to be continued.
+
+
+
