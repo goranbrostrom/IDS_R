@@ -168,12 +168,13 @@ kable(head(INDIVIDUAL), row.names = FALSE)</code></pre>
 </tbody>
 </table>
 <p>This is the total information on <em>id = 1</em>. The structure of the data frame is repeated for each individual: Six rows per individual, and only <em>static data</em> (fixed over time). This is a typical example of an <em>un-tidy data set</em>. A <em>tidy</em> data set has variables in columns and observations in rows, and that is what is needed in any structured statistical data analysis (source: <a href="https://www.jstatsoft.org/article/view/v059i10">Hadley Wickham</a>).</p>
-<p>This u-tidiness is easily fixed, but we prefer to start in the other end, with the <em>INDIV_INDIV</em> data frame.</p>
+<p>This un-tidiness is easily fixed, but we prefer to start in the other end, with the <em>INDIV_INDIV</em> data frame.</p>
 </div>
 <div id="the-indiv_indiv-data-frame" class="section level2">
 <h2>The <em>INDIV_INDIV</em> data frame</h2>
 <p>The <em>INDIV_INDIV</em> data frame has a very simple structure:</p>
-<pre class="r"><code>load(&quot;data/INDIV_INDIV.rda&quot;)
+<pre class="r"><code>library(xtable)
+load(&quot;data/INDIV_INDIV.rda&quot;)
 kable(head(INDIV_INDIV), row.names = FALSE)</code></pre>
 <table>
 <thead>
@@ -185,16 +186,6 @@ kable(head(INDIV_INDIV), row.names = FALSE)</code></pre>
 </thead>
 <tbody>
 <tr class="odd">
-<td align="right">26</td>
-<td align="right">172429</td>
-<td align="left">Mother</td>
-</tr>
-<tr class="even">
-<td align="right">26</td>
-<td align="right">625346</td>
-<td align="left">Mother</td>
-</tr>
-<tr class="odd">
 <td align="right">39</td>
 <td align="right">85814</td>
 <td align="left">Mother</td>
@@ -214,79 +205,66 @@ kable(head(INDIV_INDIV), row.names = FALSE)</code></pre>
 <td align="right">513189</td>
 <td align="left">Mother</td>
 </tr>
+<tr class="odd">
+<td align="right">55</td>
+<td align="right">779965</td>
+<td align="left">Mother</td>
+</tr>
+<tr class="even">
+<td align="right">55</td>
+<td align="right">968724</td>
+<td align="left">Mother</td>
+</tr>
 </tbody>
 </table>
-<p>The variable <em>id_1</em> is the mother of <em>id_2</em>, and the variable <em>Relation</em> is <em>redundant</em> (constant equal to “Mother”). <em>INDIV_INDIV</em> is a tidy data frame, if we regard <em>id_2</em> as the key of the <em>observations</em>. Remember, <em>id_2</em> is the child of <em>id_1</em>, so a starting point for our efforts is the data frame <em>per</em>, given by</p>
+<p>The variable <em>id_1</em> is the mother of <em>id_2</em>, and the variable <em>Relation</em> is <em>redundant</em> (constant equal to “Mother”). <em>INDIV_INDIV</em> is a tidy data frame, if we regard <em>id_2</em> as the key of the <em>observations</em>.</p>
+</div>
+<div id="creation-of-the-analysis-file" class="section level2">
+<h2>Creation of the analysis file</h2>
+<p>Remember, <em>id_2</em> is the child of <em>id_1</em>, so a starting point for our efforts is the data frame <em>per</em>, given by</p>
 <pre class="r"><code>per &lt;- data.frame(id = INDIV_INDIV$id_2,
                   mid = INDIV_INDIV$id_1)
 summary(per)</code></pre>
 <pre><code>##        id              mid        
-##  Min.   :     1   Min.   :    26  
-##  1st Qu.:249666   1st Qu.:251474  
-##  Median :499286   Median :501338  
-##  Mean   :499878   Mean   :500954  
-##  3rd Qu.:749496   3rd Qu.:749525  
+##  Min.   :     1   Min.   :    39  
+##  1st Qu.:249672   1st Qu.:251446  
+##  Median :499419   Median :501162  
+##  Mean   :499930   Mean   :500900  
+##  3rd Qu.:749614   3rd Qu.:749473  
 ##  Max.   :999988   Max.   :999932</code></pre>
+<p>However, the individuals in <em>INDIVIDUAL</em> that have no mother (in INDIVIDUAL) must be added. Or, strictly, only the <em>females</em> without a mother. Or, even stricter, only those women who are mothers to persons in <em>INDIVIDUAL</em>. So,</p>
+<pre class="r"><code>atoms &lt;- unique(INDIVIDUAL$id_I[!(INDIVIDUAL$id_I %in% per$id) &amp; INDIVIDUAL$id_I %in% per$mid])
+nat &lt;- length(atoms)</code></pre>
+<p>So, there are 10014 <em>atom mothers</em>. These women will constitute the roots of the family trees we will build. For now, we add them to <em>per</em>:</p>
+<pre class="r"><code>per &lt;- rbind(per, data.frame(id = atoms, mid = rep(NA, nat)))</code></pre>
 <p>Next we pick the six static variables <em>sex</em>, <em>birthdate</em>, <em>deathdate</em>, <em>startdate</em>, <em>enddate</em>, and <em>marriagedate</em> from <em>INDIVIDUAL</em>:</p>
-<pre class="r"><code>indx &lt;- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == &quot;Sex&quot;, &quot;id_I&quot;])
-per$sex &lt;- INDIVIDUAL[INDIVIDUAL$Type == &quot;Sex&quot;, ]$Value[indx]
-##
-indx &lt;- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == &quot;Birth_date&quot;, &quot;id_I&quot;])
-per$birthdate &lt;- INDIVIDUAL[INDIVIDUAL$Type == &quot;Birth_date&quot;, ]$Value[indx]
-##
-indx &lt;- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == &quot;Death_date&quot;, &quot;id_I&quot;])
-per$deathdate &lt;- INDIVIDUAL[INDIVIDUAL$Type == &quot;Death_date&quot;, ]$Value[indx]
-##
-indx &lt;- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == &quot;Start_observation&quot;, &quot;id_I&quot;])
-per$startdate &lt;- INDIVIDUAL[INDIVIDUAL$Type == &quot;Start_observation&quot;, ]$Value[indx]
-##
-indx &lt;- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == &quot;End_observation&quot;, &quot;id_I&quot;])
-per$stopdate &lt;- INDIVIDUAL[INDIVIDUAL$Type == &quot;End_observation&quot;, ]$Value[indx]
-##
-indx &lt;- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == &quot;Marriage_date&quot;, &quot;id_I&quot;])
-per$marriagedate &lt;- INDIVIDUAL[INDIVIDUAL$Type == &quot;Marriage_date&quot;, ]$Value[indx]
-##
+<pre class="r"><code>Types &lt;- unique(INDIVIDUAL$Type)
+for (type in Types){
+    indx &lt;- match(per$id, INDIVIDUAL[INDIVIDUAL$Type == type, &quot;id_I&quot;])
+    per[, type] &lt;- INDIVIDUAL[INDIVIDUAL$Type == type, ]$Value[indx]
+}
+
 kable(head(per), row.names = FALSE)</code></pre>
 <table>
 <thead>
 <tr class="header">
 <th align="right">id</th>
 <th align="right">mid</th>
-<th align="left">sex</th>
-<th align="left">birthdate</th>
-<th align="left">deathdate</th>
-<th align="left">startdate</th>
-<th align="left">stopdate</th>
-<th align="left">marriagedate</th>
+<th align="left">Birth_date</th>
+<th align="left">Death_date</th>
+<th align="left">Sex</th>
+<th align="left">Start_observation</th>
+<th align="left">End_observation</th>
+<th align="left">Marriage_date</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td align="right">172429</td>
-<td align="right">26</td>
-<td align="left">male</td>
-<td align="left">1737-07-20</td>
-<td align="left">1805-12-06</td>
-<td align="left">1737-07-20</td>
-<td align="left">1805-12-06</td>
-<td align="left">1761-01-01</td>
-</tr>
-<tr class="even">
-<td align="right">625346</td>
-<td align="right">26</td>
-<td align="left">male</td>
-<td align="left">1729-07-01</td>
-<td align="left">1808-02-19</td>
-<td align="left">1729-07-01</td>
-<td align="left">1808-02-19</td>
-<td align="left">1751-01-01</td>
-</tr>
-<tr class="odd">
 <td align="right">85814</td>
 <td align="right">39</td>
-<td align="left">male</td>
 <td align="left">1806-06-19</td>
 <td align="left">1887-10-16</td>
+<td align="left">male</td>
 <td align="left">1806-06-19</td>
 <td align="left">1887-10-16</td>
 <td align="left">1834-01-26</td>
@@ -294,19 +272,19 @@ kable(head(per), row.names = FALSE)</code></pre>
 <tr class="even">
 <td align="right">145756</td>
 <td align="right">55</td>
+<td align="left">1855-06-26</td>
+<td align="left">1855-06-26</td>
 <td align="left">male</td>
 <td align="left">1855-06-26</td>
 <td align="left">1855-06-26</td>
-<td align="left">NA</td>
-<td align="left">NA</td>
 <td align="left">NA</td>
 </tr>
 <tr class="odd">
 <td align="right">324780</td>
 <td align="right">55</td>
-<td align="left">male</td>
 <td align="left">1857-09-17</td>
 <td align="left">1934-09-26</td>
+<td align="left">male</td>
 <td align="left">1857-09-17</td>
 <td align="left">1934-09-26</td>
 <td align="left">1883-02-04</td>
@@ -314,16 +292,321 @@ kable(head(per), row.names = FALSE)</code></pre>
 <tr class="even">
 <td align="right">513189</td>
 <td align="right">55</td>
-<td align="left">male</td>
 <td align="left">1865-07-09</td>
 <td align="left">1926-05-06</td>
+<td align="left">male</td>
 <td align="left">1865-07-09</td>
 <td align="left">1926-05-06</td>
 <td align="left">1890-12-07</td>
 </tr>
+<tr class="odd">
+<td align="right">779965</td>
+<td align="right">55</td>
+<td align="left">1852-07-19</td>
+<td align="left">NA</td>
+<td align="left">male</td>
+<td align="left">1852-07-19</td>
+<td align="left">1932-07-01</td>
+<td align="left">1900-01-01</td>
+</tr>
+<tr class="even">
+<td align="right">968724</td>
+<td align="right">55</td>
+<td align="left">1862-01-21</td>
+<td align="left">1917-04-04</td>
+<td align="left">female</td>
+<td align="left">1862-01-21</td>
+<td align="left">1917-04-04</td>
+<td align="left">1883-04-08</td>
+</tr>
 </tbody>
 </table>
-<p>This is a good start for the analysis; to be continued.</p>
+<p>Let’s look at the characteristics of the data frame <em>per</em>:</p>
+<pre class="r"><code>str(per)</code></pre>
+<pre><code>## 'data.frame':    161422 obs. of  8 variables:
+##  $ id               : int  85814 145756 324780 513189 779965 968724 234510 446844 449751 551432 ...
+##  $ mid              : int  39 55 55 55 55 55 67 67 67 67 ...
+##  $ Birth_date       : chr  &quot;1806-06-19&quot; &quot;1855-06-26&quot; &quot;1857-09-17&quot; &quot;1865-07-09&quot; ...
+##  $ Death_date       : chr  &quot;1887-10-16&quot; &quot;1855-06-26&quot; &quot;1934-09-26&quot; &quot;1926-05-06&quot; ...
+##  $ Sex              : chr  &quot;male&quot; &quot;male&quot; &quot;male&quot; &quot;male&quot; ...
+##  $ Start_observation: chr  &quot;1806-06-19&quot; &quot;1855-06-26&quot; &quot;1857-09-17&quot; &quot;1865-07-09&quot; ...
+##  $ End_observation  : chr  &quot;1887-10-16&quot; &quot;1855-06-26&quot; &quot;1934-09-26&quot; &quot;1926-05-06&quot; ...
+##  $ Marriage_date    : chr  &quot;1834-01-26&quot; NA &quot;1883-02-04&quot; &quot;1890-12-07&quot; ...</code></pre>
+<p>As a consequence of the fact that <em>INDIVIDUAL</em> is an un-tidy data frame, the date and sex variables had to be given as <em>text strings</em>. We want <em>Sex</em> to be a <em>factor</em> and the dates are for our coming purposes best treated as numeric (unit: years after “00-01-01 BC”, which does not exist, really). So</p>
+<pre class="r"><code>per$Birth_date &lt;- as.double(toTime(per$Birth_date))
+per$Death_date &lt;- as.double(toTime(per$Death_date))
+per$Sex &lt;- as.factor(per$Sex)
+per$Start_observation &lt;- as.double(toTime(per$Start_observation))
+per$End_observation &lt;- as.double(toTime(per$End_observation))
+per$Marriage_date &lt;- as.double(toTime(per$Marriage_date))
+kable(head(per), row.names = FALSE)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">id</th>
+<th align="right">mid</th>
+<th align="right">Birth_date</th>
+<th align="right">Death_date</th>
+<th align="left">Sex</th>
+<th align="right">Start_observation</th>
+<th align="right">End_observation</th>
+<th align="right">Marriage_date</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">85814</td>
+<td align="right">39</td>
+<td align="right">1806.463</td>
+<td align="right">1887.790</td>
+<td align="left">male</td>
+<td align="right">1806.463</td>
+<td align="right">1887.790</td>
+<td align="right">1834.069</td>
+</tr>
+<tr class="even">
+<td align="right">145756</td>
+<td align="right">55</td>
+<td align="right">1855.482</td>
+<td align="right">1855.482</td>
+<td align="left">male</td>
+<td align="right">1855.482</td>
+<td align="right">1855.482</td>
+<td align="right">NA</td>
+</tr>
+<tr class="odd">
+<td align="right">324780</td>
+<td align="right">55</td>
+<td align="right">1857.711</td>
+<td align="right">1934.734</td>
+<td align="left">male</td>
+<td align="right">1857.711</td>
+<td align="right">1934.734</td>
+<td align="right">1883.094</td>
+</tr>
+<tr class="even">
+<td align="right">513189</td>
+<td align="right">55</td>
+<td align="right">1865.519</td>
+<td align="right">1926.342</td>
+<td align="left">male</td>
+<td align="right">1865.519</td>
+<td align="right">1926.342</td>
+<td align="right">1890.933</td>
+</tr>
+<tr class="odd">
+<td align="right">779965</td>
+<td align="right">55</td>
+<td align="right">1852.547</td>
+<td align="right">NA</td>
+<td align="left">male</td>
+<td align="right">1852.547</td>
+<td align="right">1932.497</td>
+<td align="right">1900.001</td>
+</tr>
+<tr class="even">
+<td align="right">968724</td>
+<td align="right">55</td>
+<td align="right">1862.056</td>
+<td align="right">1917.255</td>
+<td align="left">female</td>
+<td align="right">1862.056</td>
+<td align="right">1917.255</td>
+<td align="right">1883.267</td>
+</tr>
+</tbody>
+</table>
+<p>Now we want the ages at which events occur, so</p>
+<pre class="r"><code>per$enter &lt;- per$Start_observation - per$Birth_date
+per$exit &lt;- per$End_observation - per$Birth_date
+per$death &lt;- per$Death_date - per$Birth_date
+per$marriage &lt;- per$Marriage_date - per$Birth_date
+kable(head(per[, c(&quot;id&quot;, &quot;mid&quot;, &quot;Birth_date&quot;, &quot;enter&quot;, &quot;marriage&quot;, &quot;exit&quot;, &quot;death&quot;)]))</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="right">id</th>
+<th align="right">mid</th>
+<th align="right">Birth_date</th>
+<th align="right">enter</th>
+<th align="right">marriage</th>
+<th align="right">exit</th>
+<th align="right">death</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">85814</td>
+<td align="right">39</td>
+<td align="right">1806.463</td>
+<td align="right">0</td>
+<td align="right">27.60632</td>
+<td align="right">81.32679</td>
+<td align="right">81.32679</td>
+</tr>
+<tr class="even">
+<td align="right">145756</td>
+<td align="right">55</td>
+<td align="right">1855.482</td>
+<td align="right">0</td>
+<td align="right">NA</td>
+<td align="right">0.00000</td>
+<td align="right">0.00000</td>
+</tr>
+<tr class="odd">
+<td align="right">324780</td>
+<td align="right">55</td>
+<td align="right">1857.711</td>
+<td align="right">0</td>
+<td align="right">25.38314</td>
+<td align="right">77.02280</td>
+<td align="right">77.02280</td>
+</tr>
+<tr class="even">
+<td align="right">513189</td>
+<td align="right">55</td>
+<td align="right">1865.519</td>
+<td align="right">0</td>
+<td align="right">25.41325</td>
+<td align="right">60.82260</td>
+<td align="right">60.82260</td>
+</tr>
+<tr class="odd">
+<td align="right">779965</td>
+<td align="right">55</td>
+<td align="right">1852.547</td>
+<td align="right">0</td>
+<td align="right">47.45340</td>
+<td align="right">79.94962</td>
+<td align="right">NA</td>
+</tr>
+<tr class="even">
+<td align="right">968724</td>
+<td align="right">55</td>
+<td align="right">1862.056</td>
+<td align="right">0</td>
+<td align="right">21.21057</td>
+<td align="right">55.19894</td>
+<td align="right">55.19894</td>
+</tr>
+</tbody>
+</table>
+<p>We further define the variable <em>event</em> as an indicator of <em>death before age one</em>:</p>
+<pre class="r"><code>per$event &lt;- !is.na(per$death) &amp; per$death &lt;= 1
+table(per$event)</code></pre>
+<pre><code>## 
+##  FALSE   TRUE 
+## 146892  14530</code></pre>
+</div>
+<div id="generations" class="section level2">
+<h2>Generations</h2>
+<p><em>Generation 0</em> consists of all mothers without a mother(!).</p>
+<pre class="r"><code>per$generation &lt;- rep(NA, NROW(per))
+per$generation[is.na(per$mid)] &lt;- 0
+with(per, table(generation, Sex, useNA = &quot;ifany&quot;))</code></pre>
+<pre><code>##           Sex
+## generation female  male  &lt;NA&gt;
+##       0     10014     0     0
+##       &lt;NA&gt;  73811 77292   305</code></pre>
+<p><em>Generation 1</em> consists of all individuals whose mother is in Generation 0:</p>
+<pre class="r"><code>gen0 &lt;- per$id[!is.na(per$generation) &amp; per$generation == 0]
+per$generation[!is.na(per$mid) &amp; per$mid %in% gen0] &lt;- 1
+with(per, table(generation, Sex, useNA = &quot;ifany&quot;))</code></pre>
+<pre><code>##           Sex
+## generation female  male  &lt;NA&gt;
+##       0     10014     0     0
+##       1     17559 18285    45
+##       &lt;NA&gt;  56252 59007   260</code></pre>
+<p>We got the idea; the rest is executed in a <em>while</em> loop:</p>
+<pre class="r"><code>genX &lt;- per$id[!is.na(per$generation) &amp; per$generation == 1]
+loo &lt;- 1
+gen &lt;- 1
+while (loo){
+    oo &lt;- !is.na(per$mid) &amp; (per$mid %in% genX)
+    loo &lt;- sum(oo)
+    if (loo){
+        gen &lt;- gen + 1
+        per$generation[oo] &lt;- gen
+        genX &lt;- per$id[!is.na(per$generation) &amp; per$generation == gen]
+    }
+}
+table(per$generation, per$Sex, useNA = &quot;ifany&quot;)</code></pre>
+<pre><code>##    
+##     female  male  &lt;NA&gt;
+##   0  10014     0     0
+##   1  17559 18285    45
+##   2  11500 11978    43
+##   3  11691 12149   126
+##   4  12647 13376    79
+##   5  11611 12083    11
+##   6   6927  7466     1
+##   7   1765  1818     0
+##   8    111   135     0
+##   9      0     2     0</code></pre>
+<p>So, there are 10014 “atom mothers”, each the root of a family tree. The largest tree covers ten generations. Note that new branches of a tree is only generated by females; a male node denotes a dead end.</p>
+<p>Now we need to put on <em>grandmother’s id</em> on everyone in the second generation and above. Easy in principle: we have the mother’s id of all in these generations and in generation 1, and grandmother is just mother’s mother …</p>
+<pre class="r"><code>per$gmid &lt;- per$mid[match(per$mid, per$id)]</code></pre>
+<p>Have a look:</p>
+<pre class="r"><code>(x &lt;- per[1, c(&quot;id&quot;, &quot;mid&quot;, &quot;gmid&quot;)])</code></pre>
+<pre><code>##      id mid   gmid
+## 1 85814  39 753552</code></pre>
+<pre class="r"><code>per[per$id == x$mid, c(&quot;id&quot;, &quot;mid&quot;, &quot;gmid&quot;)]</code></pre>
+<pre><code>##        id    mid   gmid
+## 114211 39 753552 353046</code></pre>
+<p>We trust it worked (but the sample is small …). Finally, we would like to put on a variable <em>tree</em>, equal to the id of the root, on each individual.</p>
+<pre class="r"><code>per$tree &lt;- rep(NA, NROW(per))
+per$tree[per$generation == 0] &lt;- per$id[per$generation == 0] # The easy part
+nex &lt;- per$generation == 1
+per$tree[nex] &lt;- per$tree[match(per$mid[nex], per$id)] # Kids are of the same 'tree' as mom.</code></pre>
+<p>Got the idea, the rest by looping over generations 2-10:</p>
+<pre class="r"><code>for (gen in 2:10){
+    nex &lt;- per$generation == gen
+    per$tree[nex] &lt;- per$tree[match(per$mid[nex], per$id)]
+}
+head(per[, c(&quot;id&quot;,&quot;mid&quot;, &quot;gmid&quot;, &quot;generation&quot;, &quot;tree&quot;)])</code></pre>
+<pre><code>##       id mid   gmid generation   tree
+## 1  85814  39 753552          3 353046
+## 2 145756  55 598512          2 598512
+## 3 324780  55 598512          2 598512
+## 4 513189  55 598512          2 598512
+## 5 779965  55 598512          2 598512
+## 6 968724  55 598512          2 598512</code></pre>
+<p>A summary of what has been done so far:</p>
+<pre class="r"><code>summary(per)</code></pre>
+<pre><code>##        id              mid           Birth_date     Death_date   
+##  Min.   :     1   Min.   :    39   Min.   :1690   Min.   :1800   
+##  1st Qu.:249791   1st Qu.:251446   1st Qu.:1867   1st Qu.:1873   
+##  Median :499668   Median :501162   Median :1900   Median :1903   
+##  Mean   :500065   Mean   :500900   Mean   :1892   Mean   :1898   
+##  3rd Qu.:749659   3rd Qu.:749473   3rd Qu.:1923   3rd Qu.:1928   
+##  Max.   :999988   Max.   :999932   Max.   :1957   Max.   :1960   
+##                   NA's   :10014                   NA's   :98986  
+##      Sex        Start_observation End_observation Marriage_date  
+##  female:83825   Min.   :1720      Min.   :1771    Min.   :1722   
+##  male  :77292   1st Qu.:1869      1st Qu.:1903    1st Qu.:1881   
+##  NA's  :  305   Median :1902      Median :1937    Median :1917   
+##                 Mean   :1894      Mean   :1923    Mean   :1905   
+##                 3rd Qu.:1927      3rd Qu.:1951    3rd Qu.:1938   
+##                 Max.   :1957      Max.   :1960    Max.   :1960   
+##                                                   NA's   :92879  
+##      enter             exit             death           marriage    
+##  Min.   : 0.000   Min.   :  0.000   Min.   :-29.79   Min.   : 0.49  
+##  1st Qu.: 0.000   1st Qu.:  9.999   1st Qu.:  1.30   1st Qu.:23.28  
+##  Median : 0.000   Median : 26.233   Median : 31.29   Median :26.22  
+##  Mean   : 2.175   Mean   : 31.399   Mean   : 35.60   Mean   :27.60  
+##  3rd Qu.: 0.000   3rd Qu.: 49.162   3rd Qu.: 67.13   3rd Qu.:30.32  
+##  Max.   :89.885   Max.   :129.002   Max.   :102.43   Max.   :79.55  
+##                                     NA's   :98986    NA's   :92879  
+##    event           generation         gmid             tree       
+##  Mode :logical   Min.   :0.000   Min.   :    55   Min.   :    67  
+##  FALSE:146892    1st Qu.:1.000   1st Qu.:249813   1st Qu.:263243  
+##  TRUE :14530     Median :3.000   Median :495929   Median :507038  
+##  NA's :0         Mean   :3.043   Mean   :499630   Mean   :503060  
+##                  3rd Qu.:5.000   3rd Qu.:752490   3rd Qu.:752863  
+##                  Max.   :9.000   Max.   :999932   Max.   :999932  
+##                                  NA's   :45903</code></pre>
+<pre class="r"><code>save(per, file = &quot;data/per.rda&quot;)</code></pre>
+<p>And saved for future analysis.</p>
 </div>
 
 
