@@ -9,9 +9,15 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(skum)
 sobs <- obs[obs$region == "ske", ]
-sper <- per[per$region == "ske", ]
+sper <- per[per$region == "ske" & !is.na(per$foddat), ]
+sper$frsbobdat[is.na(sper$frsbobdat)] <- sper$foddat[is.na(sper$frsbobdat)]
+sper$frsbosdat[is.na(sper$frsbosdat)] <- sper$doddat[is.na(sper$frsbosdat)]
+sper <- sper[!is.na(sper$frsbosdat), ]
+sper$frsbosdat[sper$frsbosdat < sper$foddat] <- sper$foddat[sper$frsbosdat < sper$foddat]
+sper$mid[!is.na(sper$mid) & !(sper$mid %in% sper$id)] <- NA
 library(xtable)
 library(knitr)
+options(stringsAsFactors = FALSE)
 ```
 
 ## The Skellefteå data
@@ -135,8 +141,8 @@ kable(INDIV_INDIV[1:5, ], row.names = FALSE)
 Remains to save the two created data frames:
 
 ```{r saveall}
-save(INDIVIDUAL, file = "INDIVIDUAL.rda")
-save(INDIV_INDIV, file = "INDIV_INDIV.rda")
+save(INDIVIDUAL, file = "data/INDIVIDUAL.rda")
+save(INDIV_INDIV, file = "data/INDIV_INDIV.rda")
 ```
 
 
