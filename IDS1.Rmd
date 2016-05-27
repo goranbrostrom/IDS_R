@@ -1,0 +1,389 @@
+---
+title: "IDS, first attempt"
+author: "Göran Broström"
+date: "27 Jun 2015"
+output: pdf_document
+---
+
+# Replicating an example
+
+Example data are extracted from the excel file "DemoDatabase.xlsx". It contains several sheets, and we read them one by one with the aid of the **R** package *readxl*. 
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(comment=NA, fig.width=6, fig.height=6)
+options(width = 100)
+```
+
+## Reading the Excel file
+
+```{r readx}
+library(readxl)
+nom <- excel_sheets("data/DemoDatabase.xlsx") # Get the names of the sheets
+for (sheet in nom){
+   assign(sheet, read_excel("data/DemoDatabase.xlsx", sheet))
+}
+rm(sheet)
+```
+We have now got `r length(nom)` data frames with the same names as the sheets they were extracted from. 
+
+```{r ls}
+ls()
+```
+
+Let us take a look att them. At the same time we will give them more practical names, and also prepare them for easy use with the *dplyr* package (*tbl_df*). First, a note on dates.
+
+## Fix dates
+
+Dates are given by *three* variables, Day, Month, and Year. We transform these to one variable, defined as "years since '1 January the year 1 B.C.'". for instance, 1 January 1801 is 1801.001,
+2 July 1879 is 1879.499, etc. Call it "date", "startdate", or "enddate" depending on context.
+The function *toYear* does this and also removes the now redundant *Day*, *Month*, *Year* and friends.
+This is my "quick fix". 
+
+However, I am wondering why we do not use a standard date-time format, for instance *ISO-8601*. The variable *DayFrac*, appearing in some files, seems to indicate that in some cases information of time-of-day is available. Are the values of *DayFrac* chosen randomly or based on actual knowledge of which came first? 
+
+In R, dates are easily and transparantly treated, for instance
+
+```{r transdat}
+x = as.Date("1864-2-29")
+y = as.Date("1904-2-29")
+c(x, y)
+(z = as.numeric(y - x)) # Time difference in days
+z / 365.2425 # Time difference in years (1900 was _not_ a leap year)
+```
+
+
+## CON_MET_Import (cmi)
+
+```{r con_met_import, message = FALSE}
+library(dplyr)
+cmi = tbl_df(CON_MET_Import)
+rm(CON_MET_Import)
+cmi
+```
+
+Of less interest for the time being.
+
+## CONTEXT_CONTEXT (concon)
+
+```{r context_context}
+concon <- tbl_df(CONTEXT_CONTEXT)
+rm(CONTEXT_CONTEXT)
+concon
+```
+
+
+Also less interesting for now.
+
+## CONTEXT_EXT (conext)
+
+From this file we remove the less interesting variables *Id_D*, *DayFrac*, and *Date_type* (besides being less interesting, they are also non-varying).
+
+```{r context_ext, message = FALSE}
+conext <- tbl_df(CONTEXT_EXT)
+rm(CONTEXT_EXT)
+source("R/creDate.R")
+conext = creDate(conext)
+conext = select(conext, -Id_D, -DayFrac, -Date_type)
+conext
+```
+
+
+Also less interesting for now. And all of *startdate* and *enddate* are missing ...
+
+## CONTEXT (con)
+
+```{r context}
+con <- tbl_df(CONTEXT)
+rm(CONTEXT)
+head(con)
+```
+
+May be of interest ...
+
+## IND_MET_Import (imi)
+
+We remove the variable *Source*, since it is all missing, and *Explanation*, since it is redundant. *Extract* is also removed (right or wrong?).
+
+```{r ind_met_import}
+imi = tbl_df(IND_MET_Import)
+rm(IND_MET_Import)
+imi = select(imi, -Source, -Explanation, -Extract)
+imi
+with(imi, table(Type))
+```
+
+Probably of less interest for the time being.
+
+## INDIV_CONTEXT (indcon)
+
+```{r indiv_context}
+indcon = tbl_df(INDIV_CONTEXT)
+rm(INDIV_CONTEXT)
+indcon = creDate(indcon)
+indcon
+```
+
+This is a more interesting (so far) table; it contains individual data in the form of calendar time intervals describing to which context an individual belongs.
+
+## INDIV_INDIV (indind)
+
+```{r indiv_indiv}
+indind = tbl_df(INDIV_INDIV)
+rm(INDIV_INDIV)
+indind
+```
+
+No timestamps, so this looks like time-constant relations (but what about a "servant"?).
+
+## INDIVIDUAL (ind)
+
+```{r individual}
+ind = tbl_df(INDIVIDUAL)
+##rm(INDIVIDUAL)
+ind <- creDate(ind)
+summary(ind)
+```
+
+Look at *startdate* and *enddate*: all missing. Let us remove them:
+
+```{r rmvars}
+ind = select(ind, -startdate, -enddate)
+ind
+```
+
+## INDIVIDUAL_EXT (indext)
+
+We remove some uninteresting variables ... and *startdate* and *enddate*, which are all missing.
+```{r individual_ext}
+indext <- tbl_df(INDIVIDUAL_EXT)
+rm(INDIVIDUAL_EXT)
+indext = creDate(indext)
+indext <- select(indext, -Id_D, -Source, - startdate, -enddate,
+                 -Value_Id_C)
+indext
+with(indext, table(Id_I, Type, useNA = "ifany"))
+```
+
+## Labels (labels)
+
+```{r labels}
+labels = tbl_df(Labels)
+rm(Labels)
+labels
+```
+Historical reminiscence: distinguishing between labels and values.
+
+## METADATA (meta)
+
+```{r metadata}
+meta = tbl_df(METADATA)
+rm(METADATA)
+head(meta)
+```
+
+Need to check what this is ...
+
+
+
+
+# Creating a chronological event file
+
+The two data frames *ind* and *indext* contain the necessary information. We first tidy each separately, then join them.
+
+<!--Seems natural to start with the data frame *ind*. The variables *startdate* and *enddate* are all missing(!), so let us remove them, and also remove the boring variables Id_D and Value_Id_C. We can always change our mind later, if necessary.
+
+```{r timestamps}
+ind$startdate <- ind$enddate <- NULL
+ind$Id_D <- ind$Value_Id_C <- NULL
+```
+-->
+
+## The data frame *ind*
+
+We start with the data frame *ind* and list all events in chronological order *within individuals*:
+
+```{r arrange ind}
+ind <- arrange(ind, Id_I, date)
+ind
+with(ind, table(Date_type, Type))
+```
+
+This is not a *tidy* data frame (variables in columns, observations in rows). It is practical to distinguish between *time-fixed* (known at birth) and *time-varying* covariates. The latter are best described as *events*, that indices a change in the individual's covariate setup at the time of the event. The variable *Type* seems to indicate a time-fixed covariate (in the given sense), but that is not completely true: *Start_observation* and *End_observation* are clearly time-varying, and can occur more than once. (A note on *time scales*: there is *calendar time* and there is *age*. When we talk about time-fixed we mean on the age scale.)
+
+So, the time-fixed information consists of *birth_date*, *birthplace*, and *sex*. We gather this information in a data frame named *personal*:
+
+```{r creper}
+personal <- filter(ind, Type %in% c('Birth_date', 'Birth', 'Sex', 'Birth_location'))
+personal
+```
+
+It seems as if the distinction between *Birth* and *Birth_date* is that *Birth* is the event that triggers *Start_observation*. Therefore we skip the records with *Type == 'Birth'*. *Birth_location* is all-missing so we let it go as well.
+
+```{r skipbirth}
+personal <- filter(personal, !(Type %in% c('Birth', 'Birth_location')))
+personal
+```
+
+We do not need *Date_type* any longer, and when we give *Birth_date* its proper *Value*, we can remove *date*.
+
+```{r propval}
+personal$Value[is.na(personal$Value)] <- round(personal$date[is.na(personal$Value)], 3)
+personal <- select(personal, Id_I, Type, Value)
+personal
+```
+
+This data frame is untidy in a very structured way, which makes it easy to make it tidy: We want a data frame with three variables (columns), *Id_I*, *Birthdate*, and *Sex*. 
+
+```{r fixtidy}
+per = data.frame(Id_I = unique(personal$Id_I),
+                 Birthdate = round(as.numeric(personal$Value[personal$Type == "Birth_date"]), 3),
+                 Sex = personal$Value[personal$Type == "Sex"])
+per
+```
+
+That's it! now we can "tidy" the data frame *ind* by removing all records referring to *birthdate* or *sex*.
+
+```{r tidyind}
+ind <- filter(ind, !(Type %in% c("Birth", "Birth_date", "Birth_location", "Sex")))
+ind
+with(ind, table(Type, Value, useNA = "ifany"))
+```
+
+We want 'Type == "Start_observation"' to be the first record and 'Type == "End_observation"' for each individual. At the same time we get rid of the redundant variables *Date_type* and *Source*.
+
+```{r sten}
+ind <- arrange(ind, Id_I, date, Type != "Start_observation")
+ind <- arrange(ind, Id_I, date, Type == "End_observation")
+ind = select(ind, -Date_type, -Source)
+ind
+```
+
+
+
+## The data frame *indext*
+
+Next data frame to contain dates is *indext*. We sort it similarly and remove the columns *DayFrac*, and *Date_type*:
+
+```{r sortindext}
+indext <- arrange(indext, Id_I, date)
+indext <- select(indext, -DayFrac, -Date_type)
+indext
+with(indext, table(Type, Value, useNA = "ifany"))
+```
+
+The only interesting Types are *Civil_status* and *ChildBirth* (the other follow or can be reconstructed later), so we remove them.
+
+```{r removesome}
+indext <- filter(indext, Type %in% c("Civil_status", "ChildBirth"))
+indext
+```
+
+
+## Join the data frames *ind* and *indext*
+
+We call the result *indiv*:
+
+```{r joinin}
+ind$Id_I <- as.character(ind$Id_I)
+indext$Id_I <- as.character(indext$Id_I)
+indext$Value = as.character(indext$Value)
+indiv = full_join(ind, indext)
+indiv <- arrange(indiv, Id_I, date, Type != "Start_observation")
+indiv <- arrange(indiv, Id_I, date, Type == "End_observation")
+indiv
+```
+
+Now we turn *indiv* into a description of *intervals* (and remove those *starting* with *Death* or *End_observation*):
+
+```{r turniv}
+indiv$exitType <- c(indiv$Type[-1], NA)
+indiv$exitValue <- c(indiv$Value[-1], NA)
+indiv$exitdate <- c(indiv$date[-1], NA)
+indiv <- filter(indiv, !(Type %in% c("Death", "End_observation")))
+indiv
+```
+
+Time to add on *birthdate* and *sex*. We can also safely remove the now redundant variables *date* and *exitdate*:
+
+```{R addonsex}
+indx <- match(indiv$Id_I, per$Id_I)
+indiv$birthdate <- per$Birthdate[indx]
+indiv$sex <- per$Sex[indx]
+indiv$enter = round(with(indiv, date - birthdate), 3)
+indiv$exit = round(with(indiv, exitdate - birthdate), 3)
+indiv = select(indiv, -date, -exitdate)
+summary(indiv)
+indiv
+with(indiv, table(exitType))
+```
+
+With so few deaths there is not much of survival analysis to be done, but we can at least plot an estimated survival curve (with 95% confidennce limits):
+
+```{r surv}
+library(eha)
+ii <- filter(indiv, exit > enter)
+with(ii, plot(Surv(enter, exit, exitType == "Death"), fn = "surv"))
+```
+
+In a female-fertility study we would select females and use *exitType == ChildBirth* as event.
+
+```{r fertst}
+fem <- filter(indiv, sex == "Female", exit > enter)
+fit <- coxph(Surv(enter, exit, exitType == "ChildBirth") ~ 1, data = fem)
+plot(survfit(fit), fun = "cumhaz")
+```
+
+The figure shows the cumulative hazards function of child births (with 95% confidence interval).
+
+
+## Putting on *civst*
+
+Civil status, *civst* is a time-varying variable that we now can construct. We assume the value *not available* (NA) at start. The same procedure is applied for Occupation (*occ*). After that, *Type* and *Value* are no longer needed.
+
+```{r civston}
+indiv$civst = NA
+indiv$civst[indiv$Type == "Civil_status"] <- indiv$Value[indiv$Type == "Civil_status"]
+indiv$occ <- NA
+where <- indiv$Type == "Occupation"
+indiv$occ[where] <- indiv$Value[where]
+indiv = select(indiv, -Type, -Value)
+indiv
+```
+
+For *civst* and *occ*, we want to replace 'trailing' NA's by the value preceding them.
+
+```{r trailna}
+fill_in <- function(x){
+    where <- which(!is.na(x))
+    val <- x[where]
+    m <- length(where)
+    n <- length(x)
+    if (m == n) return(x)
+    for(i in seq_along(where)){
+        x[-(1:(where[i] - 1))] <- val[i]
+    }
+    x
+}
+
+indiv <- indiv %>% group_by(Id_I) %>%
+    mutate(occ = fill_in(occ), civst = fill_in(civst))
+    
+indiv
+```
+
+Now some cleaning is what remains: We want labels for *civst*, and also to remove zero-length intervals.
+
+```{r remzero}
+indiv$civst[!is.na(indiv$civst) & indiv$civst == 1] <- "unmarried" 
+indiv$civst[!is.na(indiv$civst) & indiv$civst == 2] <- "married" 
+indiv$civst[!is.na(indiv$civst) & indiv$civst == 3] <- "widow"
+indiv <- filter(indiv, exit > enter)
+indiv
+``` 
+
+We are done. The number of individuals in the final data frame is `r length(unique(indiv$Id_I))`.
+
+# Conclusion
+
+This was fairly easy to accomplish. 
+The real challenge is to write a general package for extracting useful data from an IDS data base. 
