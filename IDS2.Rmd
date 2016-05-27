@@ -2,7 +2,7 @@
 title: "IDS, second attempt"
 author: "Göran Broström"
 date: "July 9, 2015"
-output: html_document
+output: pdf_document
 ---
 
 # Episodes file creator
@@ -17,9 +17,9 @@ If the files do not exist in the local directory we download them from the inter
 
 ```{r download}
 if (!file.exists("chronicle.rda")) 
-    download.file("http://capa.ddb.umu.se/~gb/IDS/chronicle.rda", "chronicle.rda")
+    download.file("http://capa.ddb.umu.se/IDS/chronicle.rda", "chronicle.rda")
 if (!file.exists("starting.rda")) 
-    download.file("http://capa.ddb.umu.se/~gb/IDS/starting.rda", "starting.rda")
+    download.file("http://capa.ddb.umu.se/IDS/starting.rda", "starting.rda")
 
 load("chronicle.rda")
 load("starting.rda")
@@ -90,9 +90,9 @@ chronicle <- arrange(chronicle, id, Date)
 starting <- arrange(starting, id) # Only one record per id.
 ```
 
-Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** in the package **skel14* help us with that.
+Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** in the package **skum* (aka Skellefteå/Umeå) help us with that.
 ```{r recnum}
-library(skel14)
+library(skum)
 chronicle <- rc(chronicle)
 head(chronicle)
 summary(chronicle)
@@ -103,9 +103,9 @@ Next we create the important variables **enter** and **exit**. They are the *age
 ```{r birthdate}
 indx <- match(chronicle$id, starting$id)
 chronicle$birthdate <- starting$birthdate[indx]
-chronicle$exit <- tillTid(chronicle$Date) - tillTid(chronicle$birthdate)
+chronicle$exit <- as.numeric(tillTid(chronicle$Date) - tillTid(chronicle$birthdate))
 chronicle$enter <- c(NA, chronicle$exit[-NROW(chronicle)])
-chronicle$enter[chronicle$lopnr == 1] <- tillTid(starting$Date) - tillTid(starting$birthdate)
+chronicle$enter[chronicle$lopnr == 1] <- as.numeric(tillTid(starting$Date) - tillTid(starting$birthdate))
 head(chronicle)
 ```
 
@@ -205,6 +205,7 @@ episodes$sex <- factor(episodes$sex, labels = c("man", "woman"))
 Time to perform some analyses, starting with mortality!
 
 ```{r morta, results='asis'}
+episodes$exit <- as.numeric(episodes$exit) # Notlosung!!
 fit <- coxreg(Surv(enter, exit, Type == "dead") ~ sex, data = episodes)
 dr <- drop1(fit, test = "Chisq")
 ltx(fit, dr = dr)
