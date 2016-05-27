@@ -285,6 +285,8 @@ We call the result *indiv*:
 
 ```{r joinin}
 ind$Id_I <- as.character(ind$Id_I)
+ind$date <- as.numeric(ind$date)
+indext$date <- as.numeric(indext$date)
 indext$Id_I <- as.character(indext$Id_I)
 indext$Value = as.character(indext$Value)
 indiv = full_join(ind, indext)
