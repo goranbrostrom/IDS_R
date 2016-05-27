@@ -1,0 +1,247 @@
+---
+title: "Get indata, second attempt"
+author: "Göran Broström"
+date: "July 11, 2015"
+output: html_document
+---
+
+# The time-varying stuff
+
+We start with the *observation* file in the **skel14** package. It has many inconsistencies that need to be fixed.
+
+```{r observation}
+library(skel14)
+library(dplyr)
+per <- filter(person, FODDAT > 18500000 & FODDAT < 18700000)
+per <- filter(per, FODDAT %% 100 != 0)
+per <- filter(per, (FODDAT %/%100) %% 100 !=0)
+dim(per)
+obser <- filter(observation, ID %in% per$ID)
+obser <- arrange(obser, ID, STARTDAT)
+obser <- select(obser, -NOFRS, -ORT, -ORTNMN, -PID, -NARVARO_GEN, -PERS_LOPNR)
+length(unique(obser$ID))
+id <- unique(obser$ID[obser$STARTDAT < 18500101 | obser$SLUTDAT < 18500101])
+length(id)
+obser <- filter(obser, !(ID %in% id))
+dim(obser)
+length(unique(obser$ID))
+summary(obser)
+id <- unique(obser$ID[obser$STARTDAT > obser$SLUTDAT])
+obser <- filter(obser, !(ID %in% id))
+length(unique(obser$ID))
+```
+
+```{r bplo1}
+oj <- obser$STARTDAT[obser$STARTDAT > 16000000] %% 100
+barplot(table(oj))
+```
+
+Too many days == 0.
+Now let us fix invalid dates, ending with "00" (change to "01"), "00xy" (change to "01xy")
+
+```{r fixdates1}
+obser$STARTDAT[obser$STARTDAT %% 100 == 0] <- obser$STARTDAT[obser$STARTDAT %% 100 == 0] + 1
+sum(is.na(tillTid(obser$STARTDAT)))
+obser$STARTDAT[(obser$STARTDAT %/% 100) %% 100 == 0] <- obser$STARTDAT[(obser$STARTDAT %/% 100) %% 100 == 0] + 101
+sum(is.na(tillTid(obser$STARTDAT)))
+obser$SLUTDAT[obser$SLUTDAT %% 100 == 0] <- obser$SLUTDAT[obser$SLUTDAT %% 100 == 0] + 1
+sum(is.na(tillTid(obser$SLUTDAT)))
+obser$SLUTDAT[(obser$SLUTDAT %/% 100) %% 100 == 0] <- obser$SLUTDAT[(obser$SLUTDAT %/% 100) %% 100 == 0] + 101
+sum(is.na(tillTid(obser$SLUTDAT)))
+```
+
+Is this better?
+
+```{r bplo2}
+oj <- obser$STARTDAT[obser$STARTDAT > 16000000] %% 100
+barplot(table(oj))
+```
+
+Oops, the second day in a month is *very* popular, an artefact of our crude elimination of missing dates.
+
+OK, we remove all individuals with any negative interval (already done, btw, but before the manipulation of missing dates):
+
+```{r remneg0}
+id <- unique(obser$ID[obser$STARTDAT - obser$SLUTDAT > 0])
+obser <- obser[!(obser$ID %in% id), ]
+length(unique(obser$ID))
+```
+
+Now remove some unnecessary variables:
+
+```{r remunn}
+obser <- select(obser, -STARTDAT_MIN, -STARTDAT_MAX, -SLUTDAT_MIN, -SLUTDAT_MAX)
+summary(obser)
+```
+
+Now disentangle 'TYP == 99'; CIVST or SOCST change?
+
+```{r disent99}
+obser <- rc(obser)
+obser$ch_civst <- logical(NROW(obser))
+obser$next_civst <- c(obser$CIVST[-1], NA)
+is.na(obser$next_civst) <- (obser$lopnr == obser$antrec)
+obser$ch_socst <- logical(NROW(obser))
+
+obser$next_socst <- c(obser$SOCST[-1], NA)
+is.na(obser$next_socst) <- (obser$lopnr == obser$antrec)
+obser$ch_civst <- (obser$lopnr < obser$antrec) & (obser$CIVST != obser$next_civst)
+obser$ch_socst <- (obser$lopnr < obser$antrec) & (obser$SOCST != obser$next_socst)
+with(obser, table(ch_socst, ch_civst, useNA = "ifany"))
+obser$move_in <- obser$STARTTYP %in% 4:6
+obser$move_out <- obser$SLUTTYP %in% 4:6
+obser$prev_move_out <- c(NA, obser$move_out[-NROW(obser)])
+
+is.na(obser$prev_move_out) <- (obser$lopnr == 1)
+with(obser[obser$lopnr > 1, ], table(prev_move_out, move_in, useNA = "ifany"))
+```
+
+So, there are some individuals with non-consistent migration patterns. We simply remove them
+
+```{r remnoncon}
+id <- obser$ID[with(obser, (prev_move_out & !move_in) | (!prev_move_out & move_in))]
+obser <- obser[!(obser$ID %in% id), ]
+length(unique(obser$ID))
+with(obser[obser$lopnr > 1, ], table(prev_move_out, move_in, useNA = "ifany"))
+obser$prev_SLUTDAT <- c(NA, obser$SLUTDAT[-NROW(obser)])
+is.na(obser$prev_SLUTDAT) <- obser$lopnr == 1
+with(obser, summary(STARTDAT - prev_SLUTDAT))
+weq <- obser$ID[!is.na(obser$prev_SLUTDAT) & obser$STARTDAT < obser$prev_SLUTDAT]
+obser <- obser[!(obser$ID %in% weq), ]
+dim(obser)
+length(unique(obser$ID))
+```
+
+So far, so good. Any inconsistencies left?
+
+```{r incon}
+koll <- filter(obser, lopnr >= 2 & !move_in)
+sum(koll$STARTDAT != koll$prev_SLUTDAT)
+```
+
+# The files
+
+We try to define *events* by *SLUTTYP*. However, the *first entrance* is an event which must be taken into account, similarly every *in-migration* (for people who out-migrate and return).
+
+## The variables.
+
+*Time-fixed* variables (sex, birthdate, parity, etc) are kept in a separate file named **per**.
+
+```{r showper}
+per <- per[per$ID %in% obser$ID, ]
+dim(per)
+```
+
+The *time-varying* variables in our example are *dead*, *SOCST*, *CIVST*, and *NoOfKids*. We also have time-varying presence, guided by in- and out-migration. First we set up the *varsetup* file:
+
+```{r varsetup}
+varsetup <- data.frame(name = c("dead", "SOCST", "CIVST", "NoOfKids", "atRisk"), onStart = c(FALSE, rep(TRUE, 4)))
+varsetup
+```
+
+Note that the proposed fields 'DateFormat' and 'NoFillDown' are redundant: No time-varying variables are dates, and only events (onStart = FALSE) are 'Not Filled Down'.
+
+Next we need a file with *start values* of the time-varying variables. We get it from the first record of each individual:
+
+```{r startval}
+starting <-
+    obser %>%  
+    filter(lopnr == 1) %>%
+    select(ID, STARTDAT, SOCST, CIVST)
+
+starting$dead <- FALSE
+starting$migration <- 0
+starting$childBirth <- 0
+starting$atRisk <- TRUE
+head(starting)
+##save(starting, file = "starting.rda")
+```
+
+Next we prepare for the creation of the *episodesFile* by concentrating on *SLUTDAT*. Note though that moving in also is an event with date given by *STARTDAT*, so we need to duplicate some inmigs.
+
+```{r minmig}
+obser$dead <- obser$SLUTTYP == 2
+minn<- obser[obser$move_in & obser$lopnr > 1, ]
+minn$date <- minn$STARTDAT
+minn$move_out <- FALSE
+##minn$event <- minn$STARTTYP
+mout <- obser
+mout$date <- mout$SLUTDAT
+mout$move_in <- FALSE
+##mout$event <- mout$SLUTTYP
+out <- rbind(mout, minn)
+out <- arrange(out, ID, date)
+out <- rc(out) # New 'lopnr' and 'antrec'
+head(out)
+```
+
+Now, **out** is the file to create the **chronicle** file from. Relevant date is given by the just created variable *date*.
+```{r testaout}
+event <- with(out, ch_civst | ch_socst | move_in | move_out | dead)
+sum(event)
+dim(out)
+out <- out[event, ]
+dim(out)
+```
+
+## The chronicle file
+
+First step:
+
+```{r getchron}
+chron <- out[, c("ID", "date", "ch_civst", "next_civst", "ch_socst", "next_socst", "move_in", "move_out", "dead")]
+oj <- unlist(tapply(chron$dead, chron$ID, cumsum))
+chron <- chron[oj <= 1, ]
+head(chron)
+```
+
+Second step: Run *get_alla*:
+
+```{r get_alla}
+source("R/get_chronicle.R")
+source("R/get_alla.R")
+chronicle <- get_alla(chron)
+```
+
+Remains to put on **childBirth** for all guys in *chronicle*:
+
+```{r getbirths}
+mothers <- person[person$MID %in% chronicle$id, c("MID", "FODDAT")]
+mothers <- mothers[order(mothers$MID, mothers$FODDAT), ]
+names(mothers) <- c("id", "Date")
+fathers <- person[person$FID %in% chronicle$id, c("FID", "FODDAT")]
+fathers <- fathers[order(fathers$FID, fathers$FODDAT), ]
+names(fathers) <- c("id", "Date")
+births <- rbind(mothers, fathers)
+births <- rc(births)
+n <- NROW(births)
+in_b <- data.frame(id = births$id, 
+                   Variable = rep("childBirth"), 
+                   Value = births$lopnr, 
+                   Date = births$Date,
+                   atRisk = 1)
+```
+
+Now, join the two data frames and reorder:
+
+```{r joinreorder}
+chronicle <- rbind(chronicle, in_b)
+chronicle <- arrange(chronicle, id, Date)
+head(chronicle)
+##save(chronicle, file = "chronicle.rda")
+```
+
+And a final cleaning:
+
+```{r cleaning}
+id_out <- chronicle$id[chronicle$Date < 18000000]
+chronicle <- filter(chronicle, !(id %in% id_out))
+names(starting) <- c("id", "Date", "socst", "civst", "dead", "migration", "childBirth", "atRisk")
+starting <- starting[starting$id %in% chronicle$id, ]
+names(chronicle) <- c("ID_I", "Type", "Value", "Date", "atRisk")
+chronicle$Type <- as.character(chronicle$Type)
+save(chronicle, file = "chronicle.rda")
+indx <- match(starting$id, person$ID)
+starting$birthdate <- person$FODDAT[indx]
+save(starting, file = "starting.rda")
+```
