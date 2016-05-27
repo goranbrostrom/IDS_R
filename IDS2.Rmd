@@ -1,0 +1,228 @@
+---
+title: "IDS, second attempt"
+author: "Göran Broström"
+date: "July 9, 2015"
+output: html_document
+---
+
+# Episodes file creator
+
+We work along the lines of Luciana's episodes file creator for Stata. While she relies on two files, *Cronicle.dta* and *VarSetup.dta*, the **R** version will rest on an additional file, *personal.rda*, which will contain the *time-fixed* covariates. They are thus removed from the other two files, which then only concerns time-varying information. This will make the strucures simpler; for instance, the variable "OnStart" will be redundant, since we in addition extend the definition of an *event*. We consider anything that enforces a change in a time-varying variable to be an event. An event causes a *status change*.
+
+I will do this by example, so I started by creating two of the three indata files from a data set from Skellefteå. This is done in the document *get_indata2.Rmd*. The third, **personal** is created on the fly here.
+
+## Downloading and loading the necessary files
+
+If the files do not exist in the local directory we download them from the internet:
+
+```{r download}
+if (!file.exists("chronicle.rda")) 
+    download.file("http://capa.ddb.umu.se/~gb/IDS/chronicle.rda", "chronicle.rda")
+if (!file.exists("starting.rda")) 
+    download.file("http://capa.ddb.umu.se/~gb/IDS/starting.rda", "starting.rda")
+
+load("chronicle.rda")
+load("starting.rda")
+```
+
+## Creating the personal file
+
+We do it directly from the **person** data frame in **skel14**.
+
+```{r personal}
+if (file.exists("personal.rda")){
+   load("personal.rda")
+}else{
+   library(skel14)
+   personal <- person[person$ID %in% starting$id, c("ID", "FODDAT", "KON", "PARITET_G")]
+   names(personal) <- c("id", "birthdate", "sex", "parity")
+   save(personal, file = "personal.rda")
+}
+```
+
+## The chronicle data frame
+
+Let's have a look at the **chronicle** data frame:
+
+```{r thechron}
+str(chronicle)
+```
+
+The **str** function gives a concise description of its argument: A data frame with `r NROW(chronicle)` observations and `r NCOL(chronicle)` variables, three *numeric*,  one *integer* and one *character*
+```{r sumchron}
+library(knitr)
+kable(summary(chronicle))
+```
+
+The **summary** function gives summary statistics for each variable.
+
+If is of interest to look closer at the combination of **Type** and **Value**:
+
+```{r tabla}
+with(chronicle, table(Type, Value))
+```
+
+The **head** function prints the first few lines of its argument.
+
+```{r headchron}
+head(chronicle)
+```
+
+Note the values of the variable **Type**; they will be the the new time-varying covariates:
+
+```{r newc}
+(nv <- unique(chronicle$Type))
+chronicle[, nv] <- NA
+head(chronicle)
+```
+The new variables are in place, but they have no values yet ('NA' means 'Not Available', or 'missing').
+
+## Creating the 'episodes' data frame
+
+The episodes data frame is created from the chronicle data frame. We let the **Date** on each row correspond to the end of a corresponding interval. The start date will be taken from the previous record of the individual. For the first record we pick the start date from the **starting** data frame.
+
+First we ensure that the two data frames are sorted in the same way, after **id**. The chronicle file is to be sorted after date within individual. We also change the variable name **ID_I** in chronicle to **id*; simpler and the same name as in the **starting** data frame. 
+
+```{r manipulate}
+names(chronicle)[1] <- "id"
+library(dplyr)
+chronicle <- arrange(chronicle, id, Date)
+starting <- arrange(starting, id) # Only one record per id.
+```
+
+Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** in the package **skel14* help us with that.
+```{r recnum}
+library(skel14)
+chronicle <- rc(chronicle)
+head(chronicle)
+summary(chronicle)
+```
+
+Next we create the important variables **enter** and **exit**. They are the *age* of the individual at start and end of an interval.  First we put on the birth date of each individual on each of her or his interval. Then we use that together with the function **tillTid** to create the age (in years) at exit.
+
+```{r birthdate}
+indx <- match(chronicle$id, starting$id)
+chronicle$birthdate <- starting$birthdate[indx]
+chronicle$exit <- tillTid(chronicle$Date) - tillTid(chronicle$birthdate)
+chronicle$enter <- c(NA, chronicle$exit[-NROW(chronicle)])
+chronicle$enter[chronicle$lopnr == 1] <- tillTid(starting$Date) - tillTid(starting$birthdate)
+head(chronicle)
+```
+
+The next step is to put on start values. Note that they are valid until an event changes things, sot they are put in on all records for each individual.
+
+```{r startv}
+stvar <- nv[nv %in% names(starting)]
+chronicle[, stvar] <- starting[indx, stvar]
+episodes <- chronicle
+head(episodes)
+##save(episodes, file =  "episodes.rda")
+```
+
+With start values in place, we roll down the time ladder and add the rest. It takes a fairly long time (6--7 minutes) due to non-optimized code, so the first time this code is run, the created data file is saved on the hard disk, and the next time it is simply read from disk, if present.
+
+```{r goon}
+if (file.exists("episodes.rda")){
+    load("episodes.rda")
+}else{
+    source("R/fill.R")
+    episodes <- fill(episodes)
+    save(episodes, file = "episodes.rda")
+}
+cat("length of episodes file is", NROW(episodes))
+```
+
+Now the **episodes** data frame looks like this:
+
+```{r lookalike}
+head(episodes)
+summary(episodes)
+```
+
+From the summary it is obvious that some errors in the raw data are present: Intervals start before birth, Missing values in dates. We simply remove all individuals with any of these defects.
+
+```{r removal}
+weq <- unique(episodes$id[is.na(episodes$enter) | episodes$enter < 0])
+##weq <- unique(episodes$id[with(episodes, is.na(enter) | enter < 0 | is.na(exit) | exit <= enter)])
+episodes <- episodes[!(episodes$id %in% weq), ] 
+   ##filter(episodes, !(id %in% weq))
+summary(episodes)
+```
+
+So we removed `r length(weq)` individuals (with all their records). Still some trouble, one record with missing **exit**:
+
+```{r missex}
+id <- episodes$id[is.na(episodes$exit)]
+episodes[episodes$id %in% id, ]
+```
+obviously a bad date (18910500). Let's make a 'quick fix': Remove all (i.e., just one) records with missing **exit** 
+
+```{r quick}
+episodes = episodes[!is.na(episodes$exit), ]
+```
+
+Are there any non-positive-length intervals?
+
+```{r nonpos}
+(nonpos <- sum(episodes$enter >= episodes$exit))
+```
+There are `r nonpos`. We remove them.
+
+```{r remthem}
+episodes <- episodes[episodes$exit > episodes$enter, ]
+dim(episodes)
+length(unique(episodes$id))
+```
+Still some data left. Finally, we put on the fixed covariates from **personal**. Note that the first two columns of the file (always) contain **id** and **birthdate**, in that order, so
+
+```{r fixedcov}
+indx <- match(episodes$id, personal$id)
+vars <- names(personal)[-(1:2)]
+episodes[, vars] <- personal[indx, vars]
+head(episodes)
+cat("episodes size is ", NROW(episodes))
+```
+
+Some cleaning is appropriate: Keep only records "atRisk", remove some redundant, irrelevant covariates.
+
+```{r remred}
+#episodes <- episodes[episodes$atRisk == 1, ]
+episodes$Date <- episodes$dead <- episodes$migration <- NULL
+episodes$lopnr <- episodes$antrec <- NULL
+summary(episodes)
+```
+
+Some "value labels" will be nice:
+
+```{r vallab}
+episodes$Type <- as.factor(episodes$Type)
+episodes$sex <- factor(episodes$sex, labels = c("man", "woman"))
+```
+
+
+# Mortality
+
+Time to perform some analyses, starting with mortality!
+
+```{r morta, results='asis'}
+fit <- coxreg(Surv(enter, exit, Type == "dead") ~ sex, data = episodes)
+dr <- drop1(fit, test = "Chisq")
+ltx(fit, dr = dr)
+```
+
+And the plot.
+```{r deadplot, echo = FALSE}
+fit <- coxph(Surv(enter, exit, Type == "dead") ~ strata(sex), data = episodes)
+plot(survfit(fit), mark.time = FALSE, col = c("blue", "red"), xlab = "Age", ylab = "Surviving fraction")
+text(15, 0.5, "Women", col = "red")
+text(55, 0.8, "Men", col = "blue")
+```
+
+# Fertility
+
+```{r fertility}
+fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ strata(sex), data = episodes)
+plot(survfit(fit), mark.time = FALSE, fun = "cumhaz", col = c("blue", "red"), xlab = "Age", ylab = "No of births")
+text(15, 3, "Women", col = "red")
+text(45, 3, "Men", col = "blue")
+```
