@@ -2,7 +2,7 @@
 title: "IDS, third attempt"
 author: "Göran Broström"
 date: "September 19, 2015"
-output: html_document
+output: pdf_document
 ---
 
 # Episodes file creator
@@ -127,9 +127,9 @@ chronicle <- arrange(chronicle, id, Date)
 starting <- arrange(starting, id) # Only one record per id.
 ```
 
-Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** in the package **skel14* help us with that.
+Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** in the package **skum* help us with that.
 ```{r recnum}
-library(skel14)
+library(skum)
 chronicle <- rc(chronicle)
 head(chronicle)
 ```
@@ -228,7 +228,7 @@ Finally, we put on the fixed covariates from **personal**. Note that the first t
 indx <- match(episodes$id, personal$id)
 vars <- names(personal)[-(1:2)]
 episodes[, vars] <- personal[indx, vars]
-kable(head(episodes))
+head(episodes)
 ```
 
 Some cleaning is appropriate: Keep only records "atRisk", remove some redundant, irrelevant covariates.
@@ -245,7 +245,7 @@ Some "value labels" will be nice:
 ```{r vallab}
 episodes$Type <- as.factor(episodes$Type)
 episodes$sex <- factor(episodes$sex, labels = c("man", "woman"))
-kable(summary(episodes))
+summary(episodes)
 ```
 
 
@@ -254,6 +254,7 @@ kable(summary(episodes))
 Time to perform some analyses, starting with mortality!
 
 ```{r morta, cache=TRUE}
+episodes$exit <- as.numeric(episodes$exit)
 fit <- coxreg(Surv(enter, exit, Type == "dead") ~ sex, data = episodes)
 (dr <- drop1(fit, test = "Chisq"))
 fit
@@ -273,7 +274,8 @@ text(55, 0.8, "Men", col = "blue")
 
 ```{r fertility, cache = TRUE}
 fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ strata(sex), data = episodes)
-plot(survfit(fit), mark.time = FALSE, fun = "cumhaz", col = c("blue", "red"), xlab = "Age", ylab = "No of births")
+plot(survfit(fit), mark.time = FALSE, fun = "cumhaz", col = c("blue", "red"),
+     xlab = "Age", ylab = "No of births")
 text(15, 3, "Women", col = "red")
 text(45, 3, "Men", col = "blue")
 ```
@@ -281,9 +283,10 @@ text(45, 3, "Men", col = "blue")
 ## First birth, women
 
 ```{r  firstbi, cache = TRUE}
-fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ civst + birthdate, data = episodes[episodes$sex == "woman" & episodes$childBirth == 1, ])
+fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ civst + birthdate, 
+             data = episodes[episodes$sex == "woman" & episodes$childBirth == 1, ])
 summary(fit)
-plot(survfit(fit), mark.time = FALSE, xlab = "Age")
+plot(survfit(fit), mark.time = FALSE, xlab = "Age", xlim = c(15, 50))
 ```
 
 ## First birth interval, women
@@ -307,7 +310,8 @@ Now we get
 ```{r, firstivsk, cache = TRUE}
 fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ strata(civst), data = first)
 plot(survfit(fit), fun = "cumhaz", col = c("blue", "red", "black"), 
-mark.time = FALSE, xlim = c(0, 10), xlab = "Years", ylab = "Cumulative hazards", main = "First birth interval")
+    mark.time = FALSE, xlim = c(0, 10), xlab = "Years", ylab = "Cumulative hazards", 
+    main = "First birth interval")
 text(2, 2.5, "married", col = "red")
 text(5, 1.0, "widowed", col = "black")
 text(7, 0.5, "unmarried", col = "blue")
