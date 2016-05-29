@@ -1,3 +1,6 @@
+---
+output: html_document
+---
 # IDS_R
 
 ## Introduction
@@ -34,11 +37,11 @@ analysis in **R**, based on Luciana Quaranta's Stata programs.
 
 **IDS1.Rmd** is an *R markdown* file; the corresponding *html* document is 
 **IDS1.html**. It shows how to create an episodes file from the excel file
-***DemoDatabase.xlsx* 
+**DemoDatabase.xlsx** 
 
 **get_indata2.Rmd** is an attempts to create the
-**chronicle file **data/chronicle.rda** from a data retrieval from the
-**DDB. (a sort of *reverse engineering* for its own sake).
+*chronicle file* **data/chronicle.rda** from a data retrieval from the
+**DDB**. (a sort of *reverse engineering* for its own sake).
 
 **IDS2.Rmd** is the serious attempt to write an **R** function that
   extracts an episodes file from the chronicle file plus a start-up file. 
@@ -47,12 +50,12 @@ analysis in **R**, based on Luciana Quaranta's Stata programs.
 
 *toIDS.Rmd* is an *R markdown* file; the corresponding *html* file is 
 *toIDS.html*. Creates IDS files from DDB files (sort of "reverse
-*engineering": The DDB files were in 'analysis' format).
+engineering": The DDB files were in 'analysis' format).
 
 *fromIDS.Rmd* is an *R markdown* file; the corresponding *html* file is 
 *fromIDS.html*. Creates files for statistical analysis from IDS files
-*(INDIVIDUAL and INDIV_INDIV, particularly simple versions). And
-*documentation *on the fly*. 
+(INDIVIDUAL and INDIV_INDIV, particularly simple versions). And
+documentation *on the fly*. 
 
 ## General
 
