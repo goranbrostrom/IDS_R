@@ -2,8 +2,13 @@
 title: "IDS, third attempt"
 author: "Göran Broström"
 date: "September 19, 2015"
-output: pdf_document
+output: html_document
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE,  echo=TRUE)
+library(eha)
+```
 
 # Episodes file creator
 
@@ -50,24 +55,12 @@ if (!file.exists("chronicle.rda"))
     download.file("http://capa.ddb.umu.se/~gb/IDS/chronicle.rda", "chronicle.rda")
 if (!file.exists("starting.rda")) 
     download.file("http://capa.ddb.umu.se/~gb/IDS/starting.rda", "starting.rda")
+if (!file.exists("personal.rda")) 
+    download.file("http://capa.ddb.umu.se/~gb/IDS/personal.rda", "personal.rda")
 
 load("chronicle.rda")
 load("starting.rda")
-```
-
-## Creating the personal file
-
-We do it directly from the **person** data frame in **skel14**.
-
-```{r personal}
-if (file.exists("personal.rda")){
-   load("personal.rda")
-}else{
-   library(skel14)
-   personal <- person[person$ID %in% starting$id, c("ID", "FODDAT", "KON", "PARITET_G")]
-   names(personal) <- c("id", "birthdate", "sex", "parity")
-   save(personal, file = "personal.rda")
-}
+load("personal.rda")
 ```
 
 ## The chronicle data frame
@@ -127,9 +120,9 @@ chronicle <- arrange(chronicle, id, Date)
 starting <- arrange(starting, id) # Only one record per id.
 ```
 
-Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** in the package **skum* help us with that.
+Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** from the package **skum* help us with that.
 ```{r recnum}
-library(skum)
+source("R/rc.R")
 chronicle <- rc(chronicle)
 head(chronicle)
 ```
@@ -142,6 +135,7 @@ Next we create the important variables
 First we put on the birth date of each individual on each of her or his interval. Then we use that together with the function **tillTid** to create the age (in years) at exit.
 
 ```{r birthdate}
+source("R/tillTid.R")
 indx <- match(chronicle$id, starting$id)
 chronicle$birthdate <- starting$birthdate[indx]
 chronicle$exit <- tillTid(chronicle$Date) - tillTid(chronicle$birthdate)
@@ -262,22 +256,24 @@ fit
 
 And the plot.
 
-```{r deadplot, echo = FALSE, cache = TRUE}
+```{r deadplot, echo = FALSE}
 fit <- coxph(Surv(enter, exit, Type == "dead") ~ strata(sex), data = episodes)
 plot(survfit(fit), mark.time = FALSE, col = c("blue", "red"), xlab = "Age", 
      ylab = "Surviving fraction")
-text(15, 0.5, "Women", col = "red")
+text(25, 0.5, "Women", col = "red")
 text(55, 0.8, "Men", col = "blue")
+abline(h = 0)
 ```
 
 # Fertility
 
-```{r fertility, cache = TRUE}
+```{r fertility}
 fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ strata(sex), data = episodes)
 plot(survfit(fit), mark.time = FALSE, fun = "cumhaz", col = c("blue", "red"),
-     xlab = "Age", ylab = "No of births")
-text(15, 3, "Women", col = "red")
+     xlab = "Age", ylab = "No of births", xlim = c(16, 60))
+text(25, 3, "Women", col = "red")
 text(45, 3, "Men", col = "blue")
+abline(h = 0)
 ```
 
 ## First birth, women
@@ -286,7 +282,8 @@ text(45, 3, "Men", col = "blue")
 fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ civst + birthdate, 
              data = episodes[episodes$sex == "woman" & episodes$childBirth == 1, ])
 summary(fit)
-plot(survfit(fit), mark.time = FALSE, xlab = "Age", xlim = c(15, 50))
+plot(survfit(fit), mark.time = FALSE, xlab = "Age", xlim = c(17, 40), col = "blue")
+abline(h = 0)
 ```
 
 ## First birth interval, women
@@ -315,6 +312,7 @@ plot(survfit(fit), fun = "cumhaz", col = c("blue", "red", "black"),
 text(2, 2.5, "married", col = "red")
 text(5, 1.0, "widowed", col = "black")
 text(7, 0.5, "unmarried", col = "blue")
+abline(h = 0)
 ```
 
 
