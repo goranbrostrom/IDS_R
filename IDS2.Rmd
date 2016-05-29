@@ -2,8 +2,13 @@
 title: "IDS, second attempt"
 author: "Göran Broström"
 date: "July 9, 2015"
-output: pdf_document
+output: html_document
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE, echo=TRUE)
+library(eha)
+```
 
 # Episodes file creator
 
@@ -20,25 +25,14 @@ if (!file.exists("chronicle.rda"))
     download.file("http://capa.ddb.umu.se/IDS/chronicle.rda", "chronicle.rda")
 if (!file.exists("starting.rda")) 
     download.file("http://capa.ddb.umu.se/IDS/starting.rda", "starting.rda")
+if (!file.exists("personal.rda")) 
+    download.file("http://capa.ddb.umu.se/IDS/personal.rda", "personal.rda")
 
 load("chronicle.rda")
 load("starting.rda")
+load("personal.rda")
 ```
 
-## Creating the personal file
-
-We do it directly from the **person** data frame in **skel14**.
-
-```{r personal}
-if (file.exists("personal.rda")){
-   load("personal.rda")
-}else{
-   library(skel14)
-   personal <- person[person$ID %in% starting$id, c("ID", "FODDAT", "KON", "PARITET_G")]
-   names(personal) <- c("id", "birthdate", "sex", "parity")
-   save(personal, file = "personal.rda")
-}
-```
 
 ## The chronicle data frame
 
@@ -48,7 +42,8 @@ Let's have a look at the **chronicle** data frame:
 str(chronicle)
 ```
 
-The **str** function gives a concise description of its argument: A data frame with `r NROW(chronicle)` observations and `r NCOL(chronicle)` variables, three *numeric*,  one *integer* and one *character*
+The **str** function gives a concise description of its argument: A data frame with `r NROW(chronicle)` observations and `r NCOL(chronicle)` variables, three *numeric*,  one *integer* and one *character*.
+
 ```{r sumchron}
 library(knitr)
 kable(summary(chronicle))
@@ -90,9 +85,11 @@ chronicle <- arrange(chronicle, id, Date)
 starting <- arrange(starting, id) # Only one record per id.
 ```
 
-Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** in the package **skum* (aka Skellefteå/Umeå) help us with that.
+Then we introduce two help variables, **lopnr** and **antrec**. They will
+help us keeping track of where in an individual's records we presently are,
+especially if we are at the first or last record. The function **rc** from  the package **skum* (aka Skellefteå/Umeå) help us with that.
 ```{r recnum}
-library(skum)
+source("R/rc.R")
 chronicle <- rc(chronicle)
 head(chronicle)
 summary(chronicle)
@@ -101,6 +98,7 @@ summary(chronicle)
 Next we create the important variables **enter** and **exit**. They are the *age* of the individual at start and end of an interval.  First we put on the birth date of each individual on each of her or his interval. Then we use that together with the function **tillTid** to create the age (in years) at exit.
 
 ```{r birthdate}
+source("R/tillTid.R")
 indx <- match(chronicle$id, starting$id)
 chronicle$birthdate <- starting$birthdate[indx]
 chronicle$exit <- as.numeric(tillTid(chronicle$Date) - tillTid(chronicle$birthdate))
@@ -204,19 +202,21 @@ episodes$sex <- factor(episodes$sex, labels = c("man", "woman"))
 
 Time to perform some analyses, starting with mortality!
 
-```{r morta, results='asis'}
+```{r morta}
 episodes$exit <- as.numeric(episodes$exit) # Notlosung!!
 fit <- coxreg(Surv(enter, exit, Type == "dead") ~ sex, data = episodes)
-dr <- drop1(fit, test = "Chisq")
-ltx(fit, dr = dr)
+##dr <- drop1(fit, test = "Chisq")
+fit
 ```
 
 And the plot.
+
 ```{r deadplot, echo = FALSE}
 fit <- coxph(Surv(enter, exit, Type == "dead") ~ strata(sex), data = episodes)
 plot(survfit(fit), mark.time = FALSE, col = c("blue", "red"), xlab = "Age", ylab = "Surviving fraction")
 text(15, 0.5, "Women", col = "red")
 text(55, 0.8, "Men", col = "blue")
+abline(h = 0)
 ```
 
 # Fertility
@@ -226,4 +226,5 @@ fit <- coxph(Surv(enter, exit, Type == "childBirth") ~ strata(sex), data = episo
 plot(survfit(fit), mark.time = FALSE, fun = "cumhaz", col = c("blue", "red"), xlab = "Age", ylab = "No of births")
 text(15, 3, "Women", col = "red")
 text(45, 3, "Men", col = "blue")
+abline(h = 0)
 ```
