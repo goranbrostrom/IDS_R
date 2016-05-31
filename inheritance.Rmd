@@ -1,0 +1,124 @@
+---
+title: "Inheritance"
+author: "Göran Broström"
+date: "31 May 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+options(stringsAsFactors = FALSE)
+library(knitr)
+```
+
+## General remarks
+
+The session about intergenerational transmissions of infant mortality, SSHD, Leuven 2016, is organised so that all contributions are supposed to use "exactly the same code for creating the dataset for analysis and running the statistical models, that these programs would be published, and that they would all be written in Stata by me." (Luciana 2016-05-30). It is not entirely clear (to me) what is meant by this. One interpretation is that we all use Luciana's program to create a data file for analysis (from raw data in IDS format), a second interpretation is that we all use Luciana's program for the analyses as well. I do hope that my second interpretation is wrong; if not, I will have to withdraw my contribution to the session.
+
+So, in the following I assume that the first scenario is what we work with, but also the the obvious common objective,  to investigate the "intergenerational transfer" of infant mortality.
+
+## Statistical modeling
+
+The first mission of ours is to "operationalize" and interpret the concept of *intergenerational transfer*. There is essentially two ways to think about it.
+
+1. There is a *causal link* from the IMR of a woman to her daughter's. That is, if a woman experience a fatality, the the probabilty that her daughter(s) will experience one increases (or decreases). For such a relation to be reasonable, the woman's fatality must come *before* (in calendar time) her daughter experience one.
+
+2. There is no direct causal link as described above, but mother's and daughters *share* some common properities, they are more or less prone to have fatalities or not: Either noone or both.
+
+In statistical terms, 1. implies a *regression model*, while 2. would best be described by a *correlation structure*. In my mind, 2. is the most approprate way to think about it.
+
+It is suggested that *mother* is the unit of response to study, and *grandmother* is the source of *explanation* (why "grandmother and mother" and not "mother and daughter"? Just a semantic question.). It is then reasonable to let the response be a function of the number of births and number of fatalities for mother and the explanatory variable be a function of the corresponding numbers for grandmother. 
+
+```{r readdata}
+load("data/per.rda")
+per$event <- !is.na(per$death) & (per$death < 1)
+kable(head(per[, c("id", "mid", "gmid", "generation", "Sex", "event")]))
+```
+
+Each row is an individual ("child", with id *id*), and *mid* is the id of her/his mother, and *gmid* is  the id of *grandmother* (mother's mother). The variable *generation* measures how far from the *atomic mother* this individual is. The *atomic mothers* are those mothers in our data set that have no mother in the data set. They constitute *generation 0*. Finally, the logical variable *event* indicates that this individual died in infancy.
+
+The sizes of the generations are
+
+```{r sizegen}
+with(per, table(generation, useNA = "ifany"))
+```
+
+*Generation 1* is the largest, but unfortunately infants in that generation have no (reistered) grandmother. The next largest is *generation 4*, and we choose that one together with *generation 3* (mothers) and *generation 2* (grandmothers). Furthermore, we remove women in generation 2 who are not grandmothers or mothers (i.e., childless).
+
+```{r ourdata}
+inherit <- per[per$generation %in% 2:4, ]
+inherit$mid[inherit$generation == 2] <- NA
+inherit$gmid[inherit$generation != 4] <- NA
+gm <- unique(inherit$gmid[!is.na(inherit$gmid)])
+remove <- inherit$generation == 2 & !(inherit$id %in% gm)
+inherit <- inherit[!remove, ]
+```
+Before we get rid of non-mothers in generation 3, we must count the number of births and infant deaths for each grandmother. For that purpose we create a new data frame for the grandmothers with this information.
+
+```{r grannies}
+granm <- data.frame(id = gm,
+                    birthdate = inherit$Birth_date[match(gm, inherit$id)]
+                    )
+noOfKids <- with(inherit[inherit$generation == 3, ], tapply(mid, mid, length))
+noOfDeaths <- with(inherit[inherit$generation == 3, ], tapply(event, mid, sum))
+indx <- match(granm$id, names(noOfKids))
+granm$noOfKids <- noOfKids[indx]
+granm$noOfDeaths <- noOfDeaths[indx]
+with(granm, table(noOfKids, noOfDeaths, useNA = "ifany"))
+```
+
+Done with grandmothers. We do the same thing with mothers (generation 3), starting with removing generation 2 from *inherit* and then removing non-mothers from generation 3.
+
+```{r fixmothers}
+inherit <- inherit[inherit$generation %in% 3:4, ]
+kids <- inherit[inherit$generation == 4, ]
+moth <- unique(kids$mid)
+remove <- inherit$generation == 3 & !(inherit$id %in% moth)
+inherit <- inherit[!remove, ]
+```
+
+Now we create the mother-file with the same info as in the grandmother file, *plus* a link to mother (aka grandmother).
+
+```{r mommies}
+mothers <- data.frame(id = moth,
+                      birthdate = inherit$Birth_date[match(moth, inherit$id)],
+                      mid = inherit$mid[match(moth, inherit$id)]
+)
+noOfKids <- with(inherit[inherit$generation == 4, ], tapply(mid, mid, length))
+noOfDeaths <- with(inherit[inherit$generation == 4, ], tapply(event, mid, sum))
+indx <- match(mothers$id, names(noOfKids))
+mothers$noOfKids <- noOfKids[indx]
+mothers$noOfDeaths <- noOfDeaths[indx]
+with(mothers, table(noOfKids, noOfDeaths, useNA = "ifany"))
+```
+
+Now, on the *mothers* data frame, we put on *grandmas'* information. The two data frames look like this:
+
+```{r look}
+head(granm)
+head(mothers)
+```
+
+And we put on:
+
+```{r putongrandma}
+indx <- match(mothers$mid, granm$id)
+mothers$m.noOfKids <- granm$noOfKids[indx]
+mothers$m.noOfDeaths <- granm$noOfDeaths[indx]
+head(mothers)
+```
+
+OK, time for analysis. The simplest possible is a two-way table with "mother has infant deaths" vs. "grandmother has infant deaths":
+
+```{r twoway}
+mothers$fatality <- mothers$noOfDeaths > 0
+mothers$m.fatality <- mothers$m.noOfDeaths > 0
+x <- with(mothers, table(fatality, m.fatality))
+prop.table(x, margin = 2)
+fisher.test(x)
+```
+
+This shows clearly that if mother has at least one fatality, then her daughter has an increased probability of at least one fatality. 
+
+    
+
