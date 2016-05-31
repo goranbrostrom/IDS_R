@@ -2,7 +2,7 @@
 title: "Inheritance"
 author: "Göran Broström"
 date: "31 May 2016"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -13,13 +13,29 @@ library(knitr)
 
 ## General remarks
 
-The session about intergenerational transmissions of infant mortality, SSHD, Leuven 2016, is organised so that all contributions are supposed to use "exactly the same code for creating the dataset for analysis and running the statistical models, that these programs would be published, and that they would all be written in Stata by me." (Luciana 2016-05-30). It is not entirely clear (to me) what is meant by this. One interpretation is that we all use Luciana's program to create a data file for analysis (from raw data in IDS format), a second interpretation is that we all use Luciana's program for the analyses as well. I do hope that my second interpretation is wrong; if not, I will have to withdraw my contribution to the session.
+The session about intergenerational transmissions of infant mortality, ESHD 2016 in Leuven, is organised so that all contributions are supposed to use *"exactly the same code for creating the dataset for analysis and running the statistical models, that these programs would be published, and that they would all be written in Stata by me."* (LQ 2016-05-30). It is not entirely clear (to me) what is meant by this. One interpretation is that we all use L's program to create a data file for analysis (from raw data in IDS format), a second interpretation is that we all use Luciana's program *for the analyses as well*. I do hope that my second interpretation is wrong; if not, I will have to withdraw my contribution to the session.
 
 So, in the following I assume that the first scenario is what we work with, but also the the obvious common objective,  to investigate the "intergenerational transfer" of infant mortality.
 
+## Suggested variables
+
+It is suggested that a long list of *confounders* is included in the data set and subsequently in the analysis. *"Basic variables"*: child sex, birth order, multiple births, mother ID, etc; *"intergenerational transmission variables"*: grandmother´s IMR total and by sex, grandmother id, etc); and *"other variables that were decided within the group"*: mother is pregnant with the next child, previous child alive and younger than 12 months, younger sibling present.
+
+I was no part of the initial discussions about this in the group, and I wonder if *any* qualified statistician was. I take the plain error first: In a follow-up study (event history analysis), it is strictly forbidden to *condition on the future*: a cause *must* precede its effect. The variable *mother is pregnant with next child* is of that forbidden kind. A seductive argument for using it anyway is that we know (do we?) that a woman becomes pregnant nine months before a birth, and since we can observe the time of the birth (can we?) it is only a matter of backdating. After all, we are like God and can see the full history, since we are dealing with *historical data*.  As seductive as it appears, it is plain wrong: Suppose that a woman leaves our follow-up, for any reason, then we do not know whether she was pregnant or not when she left. Or, suppose that a woman experiences an abortion of the yet-to-be-born infant: We wouldn't know about its existence. And so on. The conclusion is: get rid of that covariate.
+
+Second, what good would come out of including variables without discussing their potential as confounders? Some of the suggested variables are also of an intermediating type which would be an argument for omitting them. The real risk with this approach with lots of irrelevant covariates is that it just introduces *noise* to our investigation and blurs the real effect of interest. 
+
+No, my motto is *Keep It Simple* (aka *KIS(S)*). In the next section I give one example on how that can be achieved. Note though, that I did all this during one afternoon, so there may be technical errors present in the data managing below. No formal checks have been performed! Note however that the result is fully in line with what we know since at least ten years ago.
+
 ## Statistical modeling
 
-The first mission of ours is to "operationalize" and interpret the concept of *intergenerational transfer*. There is essentially two ways to think about it.
+### General
+
+*Statistical modeling* is the heart of empirical science, and it shouldn't be taken lightly. In the proposal it is refered to as "running the statistical models", and that is worrying. It seems as if the approach will be "throw in all we got and hopefully something good comes out". (This strategy is also known under the acronym *GIGO*: "Garbage In, Garbage Out".) Below I give a KISS, non-GIGO way of analysing the problem.
+
+### A straightforward approach
+
+The first mission of ours is to "operationalize" and interpret the concept of *intergenerational transfer*. There are essentially two ways to think about it.
 
 1. There is a *causal link* from the IMR of a woman to her daughter's. That is, if a woman experience a fatality, the the probabilty that her daughter(s) will experience one increases (or decreases). For such a relation to be reasonable, the woman's fatality must come *before* (in calendar time) her daughter experience one.
 
@@ -43,7 +59,7 @@ The sizes of the generations are
 with(per, table(generation, useNA = "ifany"))
 ```
 
-*Generation 1* is the largest, but unfortunately infants in that generation have no (reistered) grandmother. The next largest is *generation 4*, and we choose that one together with *generation 3* (mothers) and *generation 2* (grandmothers). Furthermore, we remove women in generation 2 who are not grandmothers or mothers (i.e., childless).
+*Generation 1* is the largest, but unfortunately infants in that generation have no (registered) grandmother. The next largest is *generation 4*, and we choose that one together with *generation 3* (mothers) and *generation 2* (grandmothers). Furthermore, we remove women in generation 2 who are not grandmothers or mothers (i.e., childless). We also remove *men* in generation 2, of course.
 
 ```{r ourdata}
 inherit <- per[per$generation %in% 2:4, ]
@@ -108,17 +124,21 @@ mothers$m.noOfDeaths <- granm$noOfDeaths[indx]
 head(mothers)
 ```
 
+### The analysis
+
 OK, time for analysis. The simplest possible is a two-way table with "mother has infant deaths" vs. "grandmother has infant deaths":
 
 ```{r twoway}
 mothers$fatality <- mothers$noOfDeaths > 0
 mothers$m.fatality <- mothers$m.noOfDeaths > 0
 x <- with(mothers, table(fatality, m.fatality))
-prop.table(x, margin = 2)
+round(prop.table(x, margin = 2), digits = 3) * 100
 fisher.test(x)
 ```
 
-This shows clearly that if mother has at least one fatality, then her daughter has an increased probability of at least one fatality. 
+This shows clearly that if mother has at least one fatality, then her daughter has an increased probability (from 36 to 40 per cent) of at least one fatality. That difference is statistically significant, with a *p*-value of *0.12 per cent*. 
 
-    
+## Conclusion
+
+It's as simple as that: *KISS* and *no GIGO*.
 
