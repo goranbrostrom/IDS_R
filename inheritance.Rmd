@@ -2,18 +2,18 @@
 title: "Inheritance"
 author: "Göran Broström"
 date: "31 May 2016"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE)
 options(stringsAsFactors = FALSE)
 library(knitr)
 ```
 
 ## General remarks
 
-The session about intergenerational transmissions of infant mortality, ESHD 2016 in Leuven, is organised so that all contributions are supposed to use *"exactly the same code for creating the dataset for analysis and running the statistical models, that these programs would be published, and that they would all be written in Stata by me."* (LQ 2016-05-30). It is not entirely clear (to me) what is meant by this. One interpretation is that we all use L's program to create a data file for analysis (from raw data in IDS format), a second interpretation is that we all use Luciana's program *for the analyses as well*. I do hope that my second interpretation is wrong; if not, I will have to withdraw my contribution to the session.
+The session about intergenerational transmissions of infant mortality, ESHD 2016 in Leuven, is organised so that all contributions are supposed to use *"exactly the same code for creating the dataset for analysis and running the statistical models, that these programs would be published, and that they would all be written in Stata by me."* (LQ 2016-05-30). It is not entirely clear (to me) what is meant by this. One interpretation is that we all use L's program to create a data file for analysis (from raw data in IDS format), a second interpretation is that we all use Luciana's program *for the analyses as well*. I do hope that my second interpretation is wrong.
 
 So, in the following I assume that the first scenario is what we work with, but also the the obvious common objective,  to investigate the "intergenerational transfer" of infant mortality.
 
@@ -55,8 +55,8 @@ Each row is an individual ("child", with id *id*), and *mid* is the id of her/hi
 
 The sizes of the generations are
 
-```{r sizegen}
-with(per, table(generation, useNA = "ifany"))
+```{r sizegen,fig.height=4}
+barplot(with(per, table(generation)) / 1000, xlab = "Generation", ylab = "Size in thousands")
 ```
 
 *Generation 1* is the largest, but unfortunately infants in that generation have no (registered) grandmother. The next largest is *generation 4*, and we choose that one together with *generation 3* (mothers) and *generation 2* (grandmothers). Furthermore, we remove women in generation 2 who are not grandmothers or mothers (i.e., childless). We also remove *men* in generation 2, of course.
@@ -72,6 +72,7 @@ inherit <- inherit[!remove, ]
 Before we get rid of non-mothers in generation 3, we must count the number of births and infant deaths for each grandmother. For that purpose we create a new data frame for the grandmothers with this information.
 
 ```{r grannies}
+library(xtable)
 granm <- data.frame(id = gm,
                     birthdate = inherit$Birth_date[match(gm, inherit$id)]
                     )
@@ -80,7 +81,7 @@ noOfDeaths <- with(inherit[inherit$generation == 3, ], tapply(event, mid, sum))
 indx <- match(granm$id, names(noOfKids))
 granm$noOfKids <- noOfKids[indx]
 granm$noOfDeaths <- noOfDeaths[indx]
-with(granm, table(noOfKids, noOfDeaths, useNA = "ifany"))
+kable(with(granm, table(noOfKids, noOfDeaths)), caption = "Grandmothers: No. of Births (rows), No. of infant deaths (columns)")
 ```
 
 Done with grandmothers. We do the same thing with mothers (generation 3), starting with removing generation 2 from *inherit* and then removing non-mothers from generation 3.
@@ -105,14 +106,17 @@ noOfDeaths <- with(inherit[inherit$generation == 4, ], tapply(event, mid, sum))
 indx <- match(mothers$id, names(noOfKids))
 mothers$noOfKids <- noOfKids[indx]
 mothers$noOfDeaths <- noOfDeaths[indx]
-with(mothers, table(noOfKids, noOfDeaths, useNA = "ifany"))
+kable(with(mothers, table(noOfKids, noOfDeaths, useNA = "ifany")), caption = "Mothers: No. of births (rows), No. of infant deaths (columns)")
 ```
 
-Now, on the *mothers* data frame, we put on *grandmas'* information. The two data frames look like this:
+Now, on the *mothers* data frame, we put on *grandmas'* information. The two data frames look like this (first rows):
 
 ```{r look}
-head(granm)
-head(mothers)
+library(eha)
+granm$birthdate <- toDate(granm$birthdate)
+mothers$birthdate <- toDate(mothers$birthdate)
+kable(head(granm))
+kable(head(mothers))
 ```
 
 And we put on:
@@ -121,7 +125,7 @@ And we put on:
 indx <- match(mothers$mid, granm$id)
 mothers$m.noOfKids <- granm$noOfKids[indx]
 mothers$m.noOfDeaths <- granm$noOfDeaths[indx]
-head(mothers)
+kable(head(mothers))
 ```
 
 ### The analysis
@@ -131,7 +135,7 @@ OK, time for analysis. The simplest possible is a two-way table with "mother has
 ```{r twoway}
 mothers$fatality <- mothers$noOfDeaths > 0
 mothers$m.fatality <- mothers$m.noOfDeaths > 0
-x <- with(mothers, table(fatality, m.fatality))
+(x <- with(mothers, table(fatality, m.fatality)))
 round(prop.table(x, margin = 2), digits = 3) * 100
 fisher.test(x)
 ```
