@@ -1,0 +1,97 @@
+---
+title: "EpisodesFile Creator"
+author: "Göran Broström"
+date: "June 15, 2016"
+output: html_document
+bibliography: ids.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(haven)
+```
+
+# Introduction
+
+This is an attempt to directly translate the Stata program *EpisodesFileCreator* [@lq15; @lq16] to an **R** *function*, which I will call *efc*. I will strictly follow the same sectioning as Luciana. For illustration, this process will utilize two example input files, *VarSetup.dta* and *Chronicle.dta*, created by another of Luciana Quaranta's Stata program from an *IDS* data base from *CEDAR*, Umeå University. 
+
+## The arguments of *efc*
+
+The function *afc* takes three arguments: *VarSetup* and *Chronicle* give the names of the input files, while *atrisk* is the name of the variable that represent being at risk. We start here by giving these values, which will be part of the function call in the final product.
+
+```{r}
+varsetup <- "data/VarSetup.dta"
+chronicle <- "data/Chronicle.dta"
+atrisk <-  "AtRisk"
+```
+
+
+# PART 1: Read and prepare the variable setup
+
+
+```{r varsetup}
+if (file.exists(varsetup)){
+    VarSetup <- read_dta(varsetup)
+}else{
+    warning(paste(varsetup, "not found. Find and restart!"))
+}
+necessary <- c("Type", "Duration", "Transition")
+miss <- !(necessary %in% names(VarSetup))
+if (sum(miss)){
+    warning(paste("Missing in VarSetup:", necessary[miss], "(restart required)"))
+}else{
+    cat("The VarSetup is OK.\n")
+}
+```
+
+The warnings will be replaced by *errors* (stop) in the final version of the function.
+
+Our *VarSetup* file looks like this (six first records), for the record:
+
+```{r headvarsetup}
+head(VarSetup)
+```
+
+## Replacing a value of the *Type* variable (for some reason?)
+
+```{r replaceatrisk}
+VarSetup1 <- VarSetup # Why? we'll see later?
+VarSetup1$Type[VarSetup1$Type == atrisk] <- "AtRisk"
+```
+Do we need *VarSetup* later? We'll see.
+
+## Transition
+
+```{r transition}
+TypeTransition <- VarSetup1[, c("Type", "Transition")]
+```
+
+## Duration
+
+```{r duration}
+TypeDuration <- VarSetup1[with(VarSetup1, Duration == "Continuous" & Transition != "End"), "Type"]
+```
+
+## Minus1 (?)
+
+```{r minus1}
+TypeReplaceMin1 <- TypeDuration
+```
+
+The need for this copy will probably show later.
+
+## Labels
+
+Seems completely unnecessary. We skip it until proven wrong.
+
+# PART 2: Read and prepare the *Chronicle*
+
+```{r readchronicle}
+if (file.exists(chronicle)){
+    Chronicle <- read_dta(chronicle)
+}else{
+    warning(paste(chronicle), "does not exist. Stop and find!\n")
+}
+```
+
+# References
