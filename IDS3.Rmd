@@ -52,11 +52,11 @@ If the files do not exist in the local directory we download them from the inter
 
 ```{r download}
 if (!file.exists("chronicle.rda")) 
-    download.file("http://capa.ddb.umu.se/~gb/IDS/chronicle.rda", "chronicle.rda")
+    download.file("http://capa.ddb.umu.se/IDS/chronicle.rda", "chronicle.rda")
 if (!file.exists("starting.rda")) 
-    download.file("http://capa.ddb.umu.se/~gb/IDS/starting.rda", "starting.rda")
+    download.file("http://capa.ddb.umu.se/IDS/starting.rda", "starting.rda")
 if (!file.exists("personal.rda")) 
-    download.file("http://capa.ddb.umu.se/~gb/IDS/personal.rda", "personal.rda")
+    download.file("http://capa.ddb.umu.se/IDS/personal.rda", "personal.rda")
 
 load("chronicle.rda")
 load("starting.rda")
