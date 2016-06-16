@@ -152,6 +152,21 @@ TypeDateFormat <- data.frame(Type = unique(Chronicle$Type[Chronicle$Value == ""]
 
 Comment?
 
+## Continue
+
+```{r typetr}
+indx <- match(ExtractionFile$Type, TypeTransition$Type)
+ExtractionFile$Transition <- TypeTransition$Transition[indx]
+ExtractionFile$Transition[ExtractionFile$Type == "AtRisk"] <- "Start"
+```
+
+## Assign a value to Types without value but timestamp
+
+```{r assignvaluedate}
+repl <- with(ExtractionFile, Value == "" & Transition != "End")
+ExtractionFile$Value[repl] <- with(ExtractionFile[repl, ], paste(Year, Month, Day, sep = "-"))
+```
+
 
 # Created
 
