@@ -1,0 +1,2 @@
+#!/bin/bash -eu
+Rscript -e "library(rmarkdown); render('efc.Rmd')"
