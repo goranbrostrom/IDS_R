@@ -1,7 +1,7 @@
 ---
 title: "EpisodesFile Creator"
 author: "Göran Broström"
-date: "June 15, 2016"
+date: "June 16, 2016"
 output: html_document
 bibliography: ids.bib
 ---
@@ -22,7 +22,7 @@ The function *afc* takes three arguments: *VarSetup* and *Chronicle* give the na
 ```{r}
 varsetup <- "data/VarSetup.dta"
 chronicle <- "data/Chronicle.dta"
-atrisk <-  "AtRisk"
+atrisk <-  "At_risk"
 ```
 
 
@@ -33,20 +33,19 @@ atrisk <-  "AtRisk"
 if (file.exists(varsetup)){
     VarSetup <- read_dta(varsetup)
 }else{
-    warning(paste(varsetup, "not found. Find and restart!"))
+    stop(paste(varsetup, "not found. Find and restart!"))
 }
 necessary <- c("Type", "Duration", "Transition")
 miss <- !(necessary %in% names(VarSetup))
 if (sum(miss)){
-    warning(paste("Missing in VarSetup:", necessary[miss], "(restart required)"))
+    stop(paste("Missing in VarSetup:", necessary[miss], "(restart required)"))
 }else{
     cat("The VarSetup is OK.\n")
 }
 ```
 
-The warnings will be replaced by *errors* (stop) in the final version of the function.
 
-Our *VarSetup* file looks like this (six first records), for the record:
+Our *VarSetup* file looks like this (six first lines), for the record:
 
 ```{r headvarsetup}
 head(VarSetup)
@@ -54,7 +53,7 @@ head(VarSetup)
 
 ## Replacing a value of the *Type* variable (for some reason?)
 
-```{r replaceatrisk}
+```{r replaceatriskvarsetup}
 VarSetup1 <- VarSetup # Why? we'll see later?
 VarSetup1$Type[VarSetup1$Type == atrisk] <- "AtRisk"
 ```
@@ -90,8 +89,75 @@ Seems completely unnecessary. We skip it until proven wrong.
 if (file.exists(chronicle)){
     Chronicle <- read_dta(chronicle)
 }else{
-    warning(paste(chronicle), "does not exist. Stop and find!\n")
+    stop(paste(chronicle), "does not exist. Stop and find!\n")
 }
 ```
+
+
+## Check correct variable names
+
+```{r checkchronnames}
+varnames <- names(Chronicle)
+if ("ID_I" %in% varnames){
+    pos <- which(varnames == "ID_I")
+    varnames[pos] <- "Id_I" # "Real" replacement later, in "ExtractionFile"
+}
+obligat <- c("Id_I", "Day", "Month", "Year", "DayFrac", "Type", "Value")
+whoerr <- !(varnames %in% obligat)
+if (sum(whoerr)){
+    stop(paste("Missing variable names in Chronicle:", varnames[whoerr], ": FIX IT!"))
+}else{
+    cat("Names in Chronicle OK.\n")
+}
+```
+
+## Replacing name of atrisk variable and replace ID_I by Id_I (if necessary)
+
+Note: This section comes *after* the next one in Luciana's *EpisodesFileCreator*. I think that was an error. Note also that we *never* change *Chronicle* (a stata necessity, remove later?). Changes go into *ExtractionFile*.
+
+```{r replaceatriskchron}
+ExtractionFile <- Chronicle
+names(ExtractionFile) <- varnames
+repl <- ExtractionFile$Type == atrisk
+if (sum(repl)){
+    ExtractionFile$Type[repl] <- "AtRisk"
+}else{
+    stop("No 'at risk' variable found in the chronicle file. FIX and restart!")
+}
+```
+
+## Generate DateFormat for Types without Value
+
+Seems rather complicated in the *stata code*:
+
+```{statacode}
+    use Chronicle.dta, clear
+    merge m:1 Type using TypeTransition.dta, nogen norep
+    capture gen emptyType=(Value=="")
+    keep if Transition!="End" & Type!="AtRisk"
+    collapse (max) maxempty=emptyType (min) minempty=emptyType, by(Type)
+    capture keep if maxempty==1 & minempty==1
+    capture keep Type
+    capture duplicates drop
+    capture gen DateFormat="YMD"
+    save TypeDateFormat.dta, replace
+```
+
+I try to translate that like this:
+
+```{r gendateformat}
+TypeDateFormat <- data.frame(Type = unique(Chronicle$Type[Chronicle$Value == ""]),
+                             DateFormat = "YMD")
+```
+
+Comment?
+
+
+# Created
+
+```{r createdate}
+format(Sys.time(), "%b_%d_%Y_%H:%M:%S")
+```
+
 
 # References
