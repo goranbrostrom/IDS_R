@@ -214,8 +214,18 @@ if (NROW(DayFracOneDate1)){ # If empty, do nothing
 
 I don't really understand what is going on above, but in my test case, *DayFracOneDate1* becomes empty, so I leave as is, and think about that in the next step.
 
-### New version of ExtractionFile
+### Updated version of ExtractionFile
 
+```{r newextract}
+ExtractionFile <- DayFracOneDate
+ExtractionFile$numDate <- NULL
+```
+
+We skip some checks of uniqueness here.
+
+## PART 3: Check types
+
+The check that *VarSetup* and *Chronicle* match should have been done before anything else. Now we skip this and hope for the best. Can also be done later.
 
 # Created
 
