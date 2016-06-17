@@ -1,7 +1,7 @@
 ---
-title: "EpisodesFile Creator"
+title: "Episodes File Creator  (*efc*)"
 author: "Göran Broström"
-date: "June 16, 2016"
+date: "June 17, 2016"
 output: html_document
 bibliography: ids.bib
 ---
@@ -51,7 +51,7 @@ Our *VarSetup* file looks like this (six first lines), for the record:
 head(VarSetup)
 ```
 
-## Replacing a value of the *Type* variable (for some reason?)
+## Replacing a value of the *Type* variable
 
 ```{r replaceatriskvarsetup}
 VarSetup1 <- VarSetup # Why? we'll see later?
@@ -111,7 +111,7 @@ if (sum(whoerr)){
 }
 ```
 
-## Replacing name of atrisk variable and replace ID_I by Id_I (if necessary)
+## Replacing name of atrisk variable and replace ID_I by Id_I
 
 Note: This section comes *after* the next one in Luciana's *EpisodesFileCreator*. I think that was an error. Note also that we *never* change *Chronicle* (a stata necessity, remove later?). Changes go into *ExtractionFile*.
 
@@ -130,7 +130,7 @@ if (sum(repl)){
 
 Seems rather complicated in the *stata code*:
 
-```{statacode}
+```{}
     use Chronicle.dta, clear
     merge m:1 Type using TypeTransition.dta, nogen norep
     capture gen emptyType=(Value=="")
@@ -165,13 +165,63 @@ ExtractionFile$Transition[ExtractionFile$Type == "AtRisk"] <- "Start"
 ```{r assignvaluedate}
 repl <- with(ExtractionFile, Value == "" & Transition != "End")
 ExtractionFile$Value[repl] <- with(ExtractionFile[repl, ], paste(Year, Month, Day, sep = "-"))
+tmp <- with(ExtractionFile, paste(Year, Month, Day, sep = "-"))
+ExtractionFile$ChangeDate <- as.Date(tmp, format = "%Y-%m-%d")
+ExtractionFile$DayFrac[is.na(ExtractionFile$DayFrac)] <- 0
+ExtractionFile$Year <- NULL
+ExtractionFile$Month <- NULL
+ExtractionFile$Day <- NULL
 ```
+
+## Change date for date collisions
+
+### DayFracOneDate
+
+```{r collweq}
+DayFracOneDate <- ExtractionFile
+## To be filled:
+DayFracOneDate$dtype <- is.na(DayFracOneDate$ChangeDate)
+DayFracOneDate <- DayFracOneDate[with(DayFracOneDate, order(Id_I, ChangeDate, dtype)), ]
+id <- with(DayFracOneDate, paste(Id_I, ChangeDate, dtype, sep = ":"))
+temp <- unlist(tapply(id, id, seq_along))
+temp1 <- (temp == 1) & (!is.na(DayFracOneDate$ChangeDate)) 
+DayFracOneDate <- DayFracOneDate[with(DayFracOneDate, order(Id_I, temp1)), ]
+id <- with(DayFracOneDate, paste(Id_I, temp1, sep = ":"))
+temp2 <- unlist(tapply(id, id, seq_along))
+is.na(temp2) <- temp1 != 1
+indx <- tapply(temp2, DayFracOneDate$Id_I)
+DayFracOneDate$numDate <- tapply(temp2, DayFracOneDate$Id_I, max)[indx]
+rm(temp)
+rm(temp1)
+rm(temp2)
+DayFracOneDate$dtype <- NULL
+```
+
+So is *DayFracOneDate* created.
+
+### DayFracOneDate1
+
+```{r getdayfraconedate1}
+DayFracOneDate1 <- DayFracOneDate[with(DayFracOneDate, 
+                                       !is.na(numDate) & numDate == 1 &
+                                           !is.na(ChangeDate)), ]
+if (NROW(DayFracOneDate1)){ # If empty, do nothing
+    DayFrac1 <- with(DayFraconeDate1, tapply(DayFrac, list(Id_I, ChangeDate), max))
+    DayFracOneDate1$DayFrac1 <- unlist(DayFrac1) ## Is this possible?
+    DayFracOneDate1$Transition <- "End"
+}
+```
+
+I don't really understand what is going on above, but in my test case, *DayFracOneDate1* becomes empty, so I leave as is, and think about that in the next step.
+
+### New version of ExtractionFile
 
 
 # Created
 
+
 ```{r createdate}
-format(Sys.time(), "%b_%d_%Y_%H:%M:%S")
+format(Sys.time(), "%d%b%Y_%H:%M")
 ```
 
 
