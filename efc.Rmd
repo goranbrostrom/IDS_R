@@ -227,6 +227,9 @@ We skip some checks of uniqueness here.
 
 The check that *VarSetup* and *Chronicle* match should have been done before anything else. Now we skip this and hope for the best. Can also be done later.
 
+## PART 4: Time-varying covariates
+
+
 # Created
 
 
