@@ -7,45 +7,26 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(cache=TRUE,  echo=TRUE)
-library(eha)
 ```
 
 # Episodes file creator
 
-This version four of my attempts is essentially equal to version three *(IDS3.Rmd)*, but with new data, the two files created by Luciana's program for the Leuven 2016 conference (infant mortality). The filenames are *ESHD16/Chronicle.dta* and *ESHD16/VarSetup.dta*.
+This version four of my attempts is essentially equal to version three *(IDS3.Rmd)*, but with new data, the two files created by Luciana's program for the Leuven 2016 conference (infant mortality). The filenames are *ESHD16/Chronicle.dta* and *ESHD16/VarSetup.dta*. 
 
-We work along the lines of Luciana's episodes file creator for Stata. While she relies on two files,
+We work along the lines of Luciana's episodes file creator for Stata, but we take a slightly different approcah in that we first extract the *time-fixed* (called *Invariant* in the *Transition column of the *VarSetup* file) variables from the chronicle file. The *VarSetup* data frame is not needed after that. 
 
-* *Chronicle.dta* and 
-* *VarSetup.dta*, 
-
-the **R** version will rest on an additional file, 
-
-* *personal.rda*, containing the *time-fixed* covariates. It will be *created* from the other two.
-
-They are thus removed from the other two files, which then only concerns time-varying information. This will make the strucures simpler; for instance, the variable 
-
-* "OnStart" will be redundant, 
-* "FillDown" will be redundant
-
-since we in addition 
-
-* extend the definition of an *event*. 
-
-We consider 
+We  *extend the definition of an *event* and consider 
 
 * anything that enforces a change in a time-varying variable to be an event. 
 
-* An event causes a *status change*.
+* An event causes a *status change*,
 
-So, 
-
-* *We don't need* **VarSetup** 
+* but there is one *special event*, the final one denoted by *End* in the *Transition* column of the *Varsetup* file. The other events are denoted *Start*
 
 The idea is simply: In order to describe an individual's life history,
 we need
 
-* Her **status at start** (birth, first seen)
+* Her **status at start** (birth, first seen, etc)
 * **Change** of status: How and when.
 
 ## Downloading and loading the necessary files
@@ -58,41 +39,115 @@ chronicle <- read_dta("ESHD16/Chronicle.dta")
 varsetup <- read_dta("ESHD16/VarSetup.dta")
 ```
 
+## The varsetup data frame
+
+The *varsetup* data frame in our example looks like this:
+
+```{r lookatvarsetup}
+varsetup
+```
+
+The *Type* *Infant_death* is the primary event of interest (denoted *End* in the *Transition* field). The other time-varying variables in our study are *Pregnant* (note to self: a *bad habit* variable), *PreviousInfandAlive*, *YoungerSiblingPresent*, and *At_risk* (denoted *Start* in the *Transition* column). 
+
+Only *Start* and *End* variables will be kept in the *chronicle* data frame, the rest (*Invariant* transition) will be kept in a data frame called *Personal*.
+
 ## The chronicle data frame
 
-Let's have a look at the *chronicle* and *varsetup* data frames:
+Let's have a look at the *chronicle* data frames:
 
 ```{r thechron}
 head(chronicle)
-(varsetup)
 ```
 
-The **str** function gives a concise description of its argument: A data frame with `r NROW(chronicle)` observations and `r NCOL(chronicle)` variables, three *numeric*,  one *integer* and one *character*
-```{r sumchron}
-library(knitr)
-kable(summary(chronicle))
-```
-
-The **summary** function gives summary statistics for each variable.
 
 If is of interest to look closer at the  **Type** variable:
 
 ```{r tabla, echo=FALSE}
-with(chronicle, table(Type))
+(vars <- levels(as.factor(chronicle$Type)))
 ```
 
-The **head** function prints the first few lines of its argument.
+Note the values of the variable **Type**; they will be the the new time-varying covariates, and they must all be described in the *varsetup* data frame. We check that:
 
-```{r headchron}
+```{r checkthat}
+notthere <- !(vars %in% varsetup$Type)
+if (sum(notthere)){
+    cat(paste("Not in VarSetup:", vars[notthere], "\n"))
+}else{
+    cat("Chronicle Type variable OK\n")
+}
+```
+
+### Creating the *personal* data frame
+
+Now we can extract the *"Invariant"* covariates from the *chronicle* data frame and store them in the *personal* data frame. We also *sort* it by *Id_I* and *Type*. 
+
+```{r extractpersonal}
+toPers <- varsetup$Type[varsetup$Transition == "Invariant"]
+personal <- chronicle[chronicle$Type %in% toPers, ]
+personal <- personal[with(personal, order(Id_I, Type)), ]
+```
+
+We take a look at *personal*
+
+
+```{r takealookat}
+head(personal)
+```
+
+we see that *Value* is missing on "dates"; instead there is a *time stamp*. We create a *Value* (date) of the time stamp and store it in *Value*. Then the time stamps are removed, not needed here.
+
+```{r removepersonaltimestamp}
+insert <- personal$Value == ""
+datumar <- with(personal[insert, ], paste(Year, Month, Day, sep = "-"))
+personal$Value[insert] <- datumar
+personal$Year <- personal$Month <- NULL
+personal$Day <- personal$DayFrac <- NULL
+```
+
+Finally, we need to *tidy* the *personal* data frame: A tidy data frame has variables in columns and observations in rows.
+
+```{r tidypersonal}
+library(tidyr)
+personal <- spread(personal, Type, Value, convert = TRUE)
+```
+
+We take a look at it (first six)
+
+```{r lookatpersonal}
+head(as.data.frame(personal))
+```
+
+### The (rest of the) *chronicle* data file
+
+The rest of the *chronicle*, after *personal* is extracted, is given by
+
+```{r restchronicle}
+chronicle <- chronicle[!(chronicle$Type %in% toPers), ]
+chronicle <- chronicle[with(chronicle, order(Id_I, Year, Month, Day, Day, DayFrac)), ]
+```
+
+where we also put events within individuals in chronological order. It may look like this.
+
+```{r looklikethis}
 head(chronicle)
 ```
 
-Note the values of the variable **Type**; they will be the the new time-varying covariates:
+Next we want to *tidy* the *chronicle* data frame:
+
+```{r spreadchronicle}
+##chronicle$row <- 1:NROW(chronicle)
+chronicle$DayFrac[36141] <- 0.02
+chronicle <- spread(chronicle, Type, Value, convert = TRUE)
+chronicle$datum <- with(chronicle, paste(Year, Month, Day, sep = "-"))
+chronicle$datum <- as.Date(chronicle$datum)
+##chronicle$Year <- chronicle$Month <- NULL
+##chronicle$Day <- NULL
+```
 
 ```{r newc}
 (nv <- unique(chronicle$Type))
 chronicle[, nv] <- NA
-kable(head(chronicle))
+head(chronicle)
 ```
 
 The new variables are in place, but they have no values yet ('NA' means 'Not Available', or 'missing').
@@ -107,7 +162,10 @@ The episodes data frame is created from the chronicle data frame. We let
 
 * For the **first** record we pick the start date from the **starting** data frame.
 
-First we ensure that the two data frames are sorted in the same way, after **id**. The chronicle file is to be sorted after date within individual. We also change the variable name **ID_I** in chronicle to **id*; simpler and the same name as in the **starting** data frame. 
+First we ensure that the two data frames are sorted in the same way, after
+**id**. The chronicle file is to be sorted after date within individual. We
+also change the variable name **ID_I** in chronicle to **id*; simpler and
+the same name as in the **starting** data frame.
 
 ```{r manipulate}
 names(chronicle)[1] <- "id"
@@ -116,7 +174,11 @@ chronicle <- arrange(chronicle, id, Date)
 starting <- arrange(starting, id) # Only one record per id.
 ```
 
-Then we introduce two help variables, **lopnr** and **antrec**. They will help us keeping track of where in an individual's records we presently are, especially if we are at the first or last record. The function **rc** from the package **skum* help us with that.
+Then we introduce two help variables, **lopnr** and **antrec**. They will
+help us keeping track of where in an individual's records we presently are,
+especially if we are at the first or last record. The function **rc** from
+the package **skum* help us with that. 
+
 ```{r recnum}
 source("R/rc.R")
 chronicle <- rc(chronicle)
