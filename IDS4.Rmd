@@ -145,9 +145,9 @@ chronicle$datum <- as.Date(chronicle$datum)
 ```
 
 ```{r newc}
-(nv <- unique(chronicle$Type))
-chronicle[, nv] <- NA
-head(chronicle)
+##(nv <- unique(chronicle$Type))
+##chronicle[, nv] <- NA
+##head(chronicle)
 ```
 
 The new variables are in place, but they have no values yet ('NA' means 'Not Available', or 'missing').
