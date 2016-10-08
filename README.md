@@ -15,20 +15,8 @@ analysis should be minimal. It is sometimes argued that this would be an
 obstacle for scholars in (historical) demography, but in my mind, some
 programming skills are absolutely necessary for anyone who want to be a
 successful researcher in fields using statistical modeling. 
-
 An even more important argument is that the analysis of dynamic data
-(processes moving in time) requires advanced statistical modeling skills;
-only reading some pages in the Stata manual is not enough. On the contrary,
-it is almost surely damaging. Some examples of mistakes I have seen
-lately: (i) breaking the absolute rule that present risks cannot depend on
-the future (example: 'mother is pregnant' derived from a birth coming
-"soon"), (ii) using mother's age in a fertility study as the basic time scale
-and assuming proportional hazards without removing a mother from
-observation up to nine months after a birth, (iii) using *dynamic covariates*
-(eg. *parity* in a fertility study) in a wrong way, creating *dishonest*
-models, and (iv) similarly, failure to recognize the fundamental difference
-between internal and external covariates. *Mediation* is also often treated
-incorrectly. The list is long. 
+(processes moving in time) requires advanced statistical modeling skills. 
 
 So, I give two groups of examples of how to create a data file ready for
 analysis in **R**, based on Luciana Quaranta's Stata programs. 
@@ -46,14 +34,12 @@ analysis in **R**, based on Luciana Quaranta's Stata programs.
 **IDS2.Rmd** is the serious attempt to write an **R** function that
   extracts an episodes file from the chronicle file plus a start-up file. 
 
-## The program for the ESHD 2016 Conference
-
-*toIDS.Rmd* is an *R markdown* file; the corresponding *html* file is 
-*toIDS.html*. Creates IDS files from DDB files (sort of "reverse
+**toIDS.Rmd** is an *R markdown* file; the corresponding *html* file is 
+**toIDS.html**. Creates IDS files from DDB files (sort of "reverse
 engineering": The DDB files were in 'analysis' format).
 
-*fromIDS.Rmd* is an *R markdown* file; the corresponding *html* file is 
-*fromIDS.html*. Creates files for statistical analysis from IDS files
+**fromIDS.Rmd** is an *R markdown* file; the corresponding *html* file is 
+**fromIDS.html**. Creates files for statistical analysis from IDS files
 (INDIVIDUAL and INDIV_INDIV, particularly simple versions). And
 documentation *on the fly*. 
 
