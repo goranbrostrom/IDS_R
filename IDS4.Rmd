@@ -170,7 +170,7 @@ the same name as in the **starting** data frame.
 ```{r manipulate}
 names(chronicle)[1] <- "id"
 library(dplyr)
-chronicle <- arrange(chronicle, id, Date)
+chronicle <- arrange(chronicle, id, datum)
 starting <- arrange(starting, id) # Only one record per id.
 ```
 
