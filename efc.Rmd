@@ -20,8 +20,8 @@ This is an attempt to directly translate the Stata program *EpisodesFileCreator*
 The function *afc* takes three arguments: *VarSetup* and *Chronicle* give the names of the input files, while *atrisk* is the name of the variable that represent being at risk. We start here by giving these values, which will be part of the function call in the final product.
 
 ```{r}
-varsetup <- "data/VarSetup.dta"
-chronicle <- "data/Chronicle.dta"
+varsetup <- "ESHD16/VarSetup.dta"
+chronicle <- "ESHD16/Chronicle.dta"
 atrisk <-  "At_risk"
 ```
 
