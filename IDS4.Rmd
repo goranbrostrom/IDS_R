@@ -145,8 +145,8 @@ chronicle$datum <- as.Date(chronicle$datum)
 ```
 
 ```{r newc}
-##(nv <- unique(chronicle$Type))
-##chronicle[, nv] <- NA
+(nv <- unique(chronicle$Type)) ## Removed "##"
+chronicle[, nv] <- NA
 ##head(chronicle)
 ```
 
@@ -168,6 +168,7 @@ also change the variable name **ID_I** in chronicle to **id*; simpler and
 the same name as in the **starting** data frame.
 
 ```{r manipulate}
+load("starting.rda") ## NEW 16 Nov 2016!!
 names(chronicle)[1] <- "id"
 library(dplyr)
 chronicle <- arrange(chronicle, id, datum)
@@ -196,7 +197,7 @@ First we put on the birth date of each individual on each of her or his interval
 source("R/tillTid.R")
 indx <- match(chronicle$id, starting$id)
 chronicle$birthdate <- starting$birthdate[indx]
-chronicle$exit <- tillTid(chronicle$Date) - tillTid(chronicle$birthdate)
+chronicle$exit <- tillTid(chronicle$datum) - tillTid(chronicle$birthdate) ## NOTE: Date --> datum !?
 chronicle$enter <- c(NA, chronicle$exit[-NROW(chronicle)])
 chronicle$enter[chronicle$lopnr == 1] <- tillTid(starting$Date) - tillTid(starting$birthdate) # dangerous!
 head(chronicle)
@@ -296,7 +297,7 @@ Some "value labels" will be nice:
 
 ```{r vallab}
 episodes$Type <- as.factor(episodes$Type)
-episodes$sex <- factor(episodes$sex, labels = c("man", "woman"))
+##episodes$sex <- factor(episodes$sex, labels = c("man", "woman")) ## There no 'sex' variable
 summary(episodes)
 ```
 
@@ -306,6 +307,7 @@ summary(episodes)
 Time to perform some analyses, starting with mortality!
 
 ```{r morta, cache=TRUE}
+library(eha)
 episodes$exit <- as.numeric(episodes$exit)
 fit <- coxreg(Surv(enter, exit, Type == "dead") ~ sex, data = episodes)
 (dr <- drop1(fit, test = "Chisq"))
