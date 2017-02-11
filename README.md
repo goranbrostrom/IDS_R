@@ -3,6 +3,11 @@ output: html_document
 ---
 # IDS_R
 
+## NEWS
+
+* *2017-02-11*: Further development of an **R package** for *IDS* takes place the repository [idsr](https://github.com/goranbrostrom/idsr). This repository will soon be removed: At least, 
+new material will not be published here. 
+
 ## Introduction
 
 Some examples of how to create data files ready for analysis, given the IDS
